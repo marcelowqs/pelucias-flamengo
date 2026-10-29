@@ -140,6 +140,20 @@ input.q{width:78px;text-align:right} input.pr{width:92px;text-align:right}
 @media (max-width:900px){.sync{flex-direction:row;gap:10px;padding:6px 16px 0;margin:0;border:0}}
 #aviso{background:var(--infobg);border:1px solid rgba(143,176,217,.45);border-radius:10px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 #aviso.novo{background:var(--goldbg);border-color:var(--gold2)}
+body.modo-teste aside{box-shadow:inset -4px 0 0 var(--warn)}
+body.modo-teste .brand small{color:var(--warn)}
+.vgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.vbx{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.vbx .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.vbx .v{font:600 22px/1.2 var(--fd);margin-top:2px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vbx .s{font-size:12px;color:var(--mut);margin-top:2px}
+.wbars{display:flex;gap:8px;align-items:flex-end;height:110px;margin-top:14px}
+.wb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;min-width:0}
+.wb .wt{flex:1;width:100%;max-width:38px;display:flex;align-items:flex-end;background:var(--s2);border-radius:4px 4px 0 0}
+.wb .wt i{display:block;width:100%;background:var(--gold2);opacity:.5;border-radius:4px 4px 0 0}
+.wb.hoje .wt i{background:var(--gold);opacity:1} .wb.hoje small:last-child{color:var(--gold);font-weight:600}
+.wb.fut{opacity:.4} .wb small{font-size:10.5px;color:var(--mut);white-space:nowrap}
+@media (max-width:560px){.vgrid{grid-template-columns:1fr}}
 #toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:80;align-items:center;pointer-events:none}
 #toast div{background:var(--s3);border:1px solid var(--line);padding:9px 16px;border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 #toast div.err{border-color:var(--bad);color:var(--bad)}
@@ -215,7 +229,7 @@ function toast(msg,cls=''){const d=document.createElement('div');d.textContent=m
 function armed(b,label='Confirmar?'){if(b.dataset.armed)return true;b.dataset.armed='1';const t=b.textContent;b.textContent=label;setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent=t}},3500);return false}
 
 /* ============ estado ============ */
-const APP_VER='20261029-123242';
+const APP_VER='20261029-123734';
 const KEY='mfplai_pelucias_fla_v1';
 const DEF={empresa:'MF Plai',totalRede:184,royaltyPct:15,royaltyBase:'bruta',icms:20,icmsCredito:0,pis:0.65,cofins:3,irpj:2.28,outrosImp:0,
   comissaoPadrao:5,prazoPadrao:'30/60/90',multA:1.5,multB:1,multC:0.6,diasReposicao:30,armazemMensal:0,armazemPorPeca:0.3,freteSaidaPct:3,
@@ -233,7 +247,8 @@ const precoForma=(v,f)=>r2(n(v)*(1-descForma(f)/100));
 const prazoForma=f=>f==='pix'?S.cfg.prazoPix:f==='cartao'?S.cfg.prazoCartao:S.cfg.prazoPadrao;
 function load(){try{const t=localStorage.getItem(KEY);if(t){const o=Object.assign(blank(),JSON.parse(t));o.cfg={...DEF,...o.cfg};o.seq={ped:0,comp:0,mov:0,...o.seq};return o}}catch(e){}return null}
 let S=load();
-function save(){if(SB)return salvarRemoto();let k=0;const go=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){if(++k<3)setTimeout(go,500);else toast('Não consegui salvar no navegador (espaço cheio?). Exporte um backup em Ajustes.','err')}};go()}
+let TESTE=false;const KEY_T='mfplai_pelucias_teste_v1';
+function save(){if(SB&&!TESTE)return salvarRemoto();let k=0;const go=()=>{try{localStorage.setItem(SB?KEY_T:KEY,JSON.stringify(S))}catch(e){if(++k<3)setTimeout(go,500);else toast('Não consegui salvar no navegador (espaço cheio?). Exporte um backup em Ajustes.','err')}};go()}
 let E={};
 const prod=id=>S.produtos.find(p=>p.id===id);
 const forn=id=>S.fornecedores.find(f=>f.id===id);
@@ -408,13 +423,13 @@ function drawNav(){
   const t=today();
   const venc={receber:receberLista().filter(o=>!o.x.pago&&o.x.venc<t).length,pagar:S.pagar.filter(x=>!x.pago&&x.venc<t).length};
   $('#nav').innerHTML=NAV.map(([g,it])=>`<div class="grp">${g}</div>`+it.map(([k,l])=>`<a href="#${k}" class="${cur===k?'on':''}">${l}${venc[k]?`<span class="bdg">${venc[k]}</span>`:''}</a>`).join('')).join('');
-  $('#brandSub').textContent=(S.cfg.empresa||'')+' · Bloco 39';
+  $('#brandSub').textContent=TESTE?'Ambiente de teste':(S.cfg.empresa||'')+' · Bloco 39';
 }
 function render(){
   E=calcEstoque();
   const v=VIEWS[cur]||VIEWS.painel;
-  const ban=S.exemplo?`<div class="banner"><span><b>Ambiente de teste.</b> Todos os dados são fictícios: lance pedidos, receba, antecipe, apague à vontade. Para voltar ao ponto inicial, restaure os dados de teste.</span><button class="btn sm" data-act="resetTeste">Restaurar dados de teste</button></div>`:'';
-  $('#view').innerHTML=ban+v();drawNav();if(SB&&cur==='ajustes')desenharUsuarios();
+  const ban=S.exemplo?`<div class="banner"><span><b>🧪 Ambiente de teste.</b> Todos os dados são fictícios: lance pedidos, receba, antecipe, apague à vontade.${TESTE?' Nada aqui altera o sistema real.':''} Para voltar ao ponto inicial, restaure os dados de teste.</span><span class="acts"><button class="btn sm" data-act="resetTeste">Restaurar dados de teste</button>${TESTE?'<button class="btn sm pri" data-act="sairTeste">Voltar ao sistema real</button>':''}</span></div>`:'';
+  $('#view').innerHTML=ban+v();drawNav();if(SB&&!TESTE&&cur==='ajustes')desenharUsuarios();
 }
 window.addEventListener('hashchange',()=>{cur=location.hash.slice(1)||'painel';render();window.scrollTo(0,0)});
 
@@ -444,6 +459,22 @@ const mbar=(v,max,cls='')=>`<div class="bar ${cls}"><i style="width:${Math.max(0
 /* ============ VIEWS ============ */
 const VIEWS={},ACT={};
 
+/* ============ vendas do dia / semana / mês ============ */
+const DSEM=['seg','ter','qua','qui','sex','sáb','dom'];
+function semanaDe(t){const dw=(pd(t).getDay()+6)%7;const ini=addDays(t,-dw);return {ini,fim:addDays(ini,6),dw}}
+function vendasLoj(ini,fim){const ps=pedFat().filter(p=>p.faturadoEm>=ini&&p.faturadoEm<=fim);return {v:sum(ps,p=>dreCalc(p).bruto),q:sum(ps,p=>dreCalc(p).pecas),n:ps.length,l:new Set(ps.map(p=>p.lojaId)).size}}
+function vendasPdv(ini,fim){const ss=allSellout().filter(x=>x.data>=ini&&x.data<=fim);return {v:sum(ss,x=>n(x.valor)),q:sum(ss,x=>n(x.qtd)),n:ss.length,l:new Set(ss.map(x=>x.lojaId)).size}}
+function blocoVendas(tipo){const t=today(),mes=mkey(t),w=semanaDe(t);const f=tipo==='pdv'?vendasPdv:vendasLoj;
+  const var_=(a,b)=>{if(!b)return a?'<span class="chip c-info">sem base</span>':'';const v=(a-b)/b*100;return `<span class="${v>=0?'ok':'bad'}">${v>=0?'▲':'▼'} ${P(Math.abs(v))}</span>`};
+  const dia=f(t,t),diaA=f(addDays(t,-7),addDays(t,-7)),sem=f(w.ini,t),semA=f(addDays(w.ini,-7),addDays(t,-7)),me=f(mes+'-01',t);
+  const dAnt=+t.slice(8)-1;const mA0=nextMonthKey(mes,-1)+'-01';const mA=f(mA0,addDays(mA0,Math.min(dAnt,+lastDay(nextMonthKey(mes,-1)).slice(8)-1)));
+  const dias=[...Array(7)].map((_,i)=>{const d=addDays(w.ini,i);return {d,lbl:DSEM[i],x:d<=t?f(d,d):null}});const mx=Math.max(1,...dias.map(x=>x.x?x.x.v:0));
+  const sub=x=>tipo==='pdv'?`${N(x.q)} pç vendidas · ${x.l} loja(s)`:`${N(x.q)} pç · ${x.n} pedido(s)`;
+  const sem_dados=tipo==='pdv'&&!allSellout().length;
+  const col=(l,x,vs,cmp)=>`<div class="vbx"><div class="l">${l}</div><div class="v">${RK(x.v)}</div><div class="s">${sub(x)}</div><div class="s">${var_(x.v,vs.v)} <span class="mut">${cmp}</span></div></div>`;
+  return `<div class="card"><h2>${tipo==='pdv'?'Vendas nas lojas (PDV)':'Vendas aos lojistas'} <span class="sm mut">${tipo==='pdv'?'sell-out ao consumidor':'faturamento'}</span></h2>
+   ${sem_dados?`<p class="note">Assim que o PDV das lojas estiver integrado (ou você importar um relatório em Sell-out), aqui aparecem as vendas ao consumidor de hoje, da semana e do mês, comparadas com os períodos anteriores.</p>`:`<div class="vgrid">${col('Hoje · '+DSEM[w.dw],dia,diaA,'vs. '+DSEM[w.dw]+' passada')}${col(`Semana · ${D(w.ini).slice(0,5)} a ${D(w.fim).slice(0,5)}`,sem,semA,'vs. mesmos dias da semana passada')}${col('Mês · '+ML(mes),me,mA,'vs. mesmo período do mês passado')}</div>
+   <div class="wbars">${dias.map((x,i)=>`<div class="wb ${i===w.dw?'hoje':''} ${x.x?'':'fut'}"><small>${x.x&&x.x.v?RK(x.x.v).replace('R$ ',''):''}</small><div class="wt"><i style="height:${x.x?Math.max(2,x.x.v/mx*100):0}%"></i></div><small>${x.lbl}</small></div>`).join('')}</div>`}</div>`}
 VIEWS.painel=()=>{
   const t=today(),mes=mkey(t);const fat=pedFat();const dm=sumDre(fat.filter(p=>mkey(p.faturadoEm)===mes));
   const est=S.produtos.reduce((a,p)=>{const r=E[p.id];if(r.saldo>0){a.q+=r.saldo;a.v+=r.saldo*r.cm}return a},{q:0,v:0});
@@ -459,6 +490,7 @@ VIEWS.painel=()=>{
   const repo=lojas.map(o=>{const ps=fat.filter(p=>p.lojaId===o.l.id).sort((a,b)=>b.faturadoEm.localeCompare(a.faturadoEm));return {...o,u:ps[0]}}).filter(o=>o.u&&diffDays(o.u.faturadoEm,t)>=n(S.cfg.diasReposicao)).sort((a,b)=>a.u.faturadoEm.localeCompare(b.u.faturadoEm));
   const ctv=S.contratos.filter(c=>c.fim&&c.fim>=t&&diffDays(t,c.fim)<=60);
   return `<div class="head"><div><h1>Painel</h1><p>${ML(mes)} · operação de pelúcias licenciadas</p></div><div class="acts"><button class="btn" data-act="atualizar">↻ Atualizar</button><button class="btn pri" data-act="novoPedido">+ Novo pedido</button></div></div>
+  <div class="cols">${blocoVendas('loj')}${blocoVendas('pdv')}</div>
   <div class="kpis">
    ${kpi('Faturado no mês',RK(dm.bruto),`${dm.n} pedido(s) · ${N(dm.pecas)} peças`,'hl')}
    ${kpi('Margem de contribuição',RK(dm.mc),dm.bruto?P(dm.mcp)+' da receita':'sem vendas no mês')}
@@ -724,7 +756,7 @@ VIEWS.ajustes=()=>{const c=S.cfg;const g=(id,l,o={})=>fld('c_'+id,l,c[id],{t:'nu
   <div class="card"><h2>Logística e Bloco 39</h2><div class="fg">${g('armazemMensal','Custo fixo do Bloco 39 (R$/mês)',{hint:'Idem: prefira cadastrar como despesa fixa'})}${g('armazemPorPeca','Manuseio/expedição (R$/peça)')}${g('freteSaidaPct','Frete de entrega estimado (% do pedido)')}${g('diasFreteVenda','Vencimento do frete de venda (dias)')}${g('leadTime','Lead time padrão do fornecedor (dias)')}${g('segDias','Estoque de segurança (dias)')}${g('coberturaDias','Cobertura de cada recompra (dias)')}</div></div>
   <div class="card"><h2>Financeiro</h2><div class="fg">${g('taxaFinMes','Custo do dinheiro (% ao mês)')}${g('diaVencImpostos','Dia de vencimento dos impostos (mês seguinte)')}${g('despFixasMes','Despesas fixas (R$/mês)',{hint:'Usado no DRE só enquanto não houver despesas fixas cadastradas em Contas a pagar'})}</div></div>
   <div class="card"><h2>Backup</h2><p class="note">Os dados ficam neste navegador. Exporte um backup com frequência e guarde no Drive.</p><div class="acts" style="margin-top:10px"><button class="btn" data-act="exportar">Exportar backup (JSON)</button><label class="btn" for="impFile">Importar backup</label><input id="impFile" type="file" accept=".json,application/json" data-chg="impFile" hidden><button class="btn dng" data-act="zerar">Apagar todos os dados</button></div></div>
-  ${SB?`<div class="card"><h2>Usuários com acesso</h2><div id="usrBox" class="note">Carregando…</div></div>`:`<div class="card"><h2>Ambiente de teste</h2><p class="note">${S.exemplo?'Este navegador está com os dados de teste. Restaurar volta tudo ao ponto inicial, apagando o que foi lançado nos testes.':'Este navegador está com dados reais. Os dados de teste só devem ser carregados num navegador ou endereço separado.'}</p><div class="acts" style="margin-top:10px">${S.exemplo?'<button class="btn" data-act="resetTeste">Restaurar dados de teste</button>':''}</div></div>`}`;
+  ${SB?`<div class="card"><h2>Ambiente de teste</h2><p class="note">${TESTE?'Você está no ambiente de teste. Os dados fictícios ficam só neste navegador; nada aqui altera o sistema real.':'Abre uma cópia do sistema com dados fictícios para treinar e testar, sem mexer nos dados reais.'}</p><div class="acts" style="margin-top:10px">${TESTE?'<button class="btn" data-act="resetTeste">Restaurar dados de teste</button><button class="btn pri" data-act="sairTeste">Voltar ao sistema real</button>':'<button class="btn pri" data-act="entrarTeste">🧪 Abrir ambiente de teste</button>'}</div></div>${TESTE?'':`<div class="card"><h2>Usuários com acesso</h2><div id="usrBox" class="note">Carregando…</div></div>`}`:`<div class="card"><h2>Ambiente de teste</h2><p class="note">${S.exemplo?'Este navegador está com os dados de teste. Restaurar volta tudo ao ponto inicial, apagando o que foi lançado nos testes.':'Este navegador está com dados reais. Os dados de teste só devem ser carregados num navegador ou endereço separado.'}</p><div class="acts" style="margin-top:10px">${S.exemplo?'<button class="btn" data-act="resetTeste">Restaurar dados de teste</button>':''}</div></div>`}`;
 };
 
 /* ============ sell-out (PDV) ============ */
@@ -823,7 +855,7 @@ document.getElementById('view').addEventListener('input',e=>{if(e.target.id==='b
 ACT.closeM=()=>closeModal();
 ACT.pedSt=d=>{UI.pedSt=d.k;render()};ACT.recF=d=>{UI.recF=d.k;render()};ACT.pagF=d=>{UI.pagF=d.k;render()};
 ACT.togG=d=>{UI.open.has(d.id)?UI.open.delete(d.id):UI.open.add(d.id);render()};
-ACT.resetTeste=(d,b)=>{if(!armed(b,'Confirmar: voltar ao início'))return;seed();UI.dre=null;render();toast('Dados de teste restaurados','okk')};
+ACT.resetTeste=(d,b)=>{if(SB&&!TESTE)return;if(!armed(b,'Confirmar: voltar ao início'))return;seed();UI.dre=null;render();toast('Dados de teste restaurados','okk')};
 ACT.limparEx=(d,b)=>{if(!armed(b,'Confirmar: apagar exemplos'))return;const keep=S.cfg;S=blank();S.cfg={...keep};save();render();toast('Exemplos apagados. Sistema pronto para os seus dados.','okk')};
 ACT.zerar=(d,b)=>{if(SB&&ME?.papel!=='proprietario')return toast('Só o proprietário pode apagar os dados.','err');if(!armed(b,'Clique de novo para apagar TUDO'))return;S=blank();save();render();toast('Todos os dados foram apagados.')};
 ACT.exportar=()=>{const txt=JSON.stringify(S);try{const blob=new Blob([txt],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`pelucias-backup-${today()}.json`;document.body.appendChild(a);a.click();a.remove()}catch(e){}
@@ -1151,7 +1183,7 @@ async function carregar(){const {data,error}=await SB.from('app_state').select('
   SUJO=false;render();setSt('Tudo salvo ✓','ok');return true}
 async function carregarPDV(){const {data}=await SB.from('pdv_vendas').select('data,cnpj,loja_cod,ean,qtd,valor').gte('data',addDays(today(),-120)).limit(20000);PDV=data||[];if(cur==='sellout'||cur==='painel')render()}
 function pdvMapeado(){const out=[];let semLoja=0;PDV.forEach(r=>{const L=achaLoja(r.cnpj||r.loja_cod);const p=achaProd(r.ean);if(!L||!p){semLoja++;return}out.push({data:r.data,lojaId:L.l.id,pid:p.id,qtd:n(r.qtd),valor:n(r.valor),origem:'pdv'})});pdvMapeado.semLoja=semLoja;return out}
-const allSellout=()=>SB?S.sellout.concat(pdvMapeado()):S.sellout;
+const allSellout=()=>SB&&!TESTE?S.sellout.concat(pdvMapeado()):S.sellout;
 
 function telaLogin(msg=''){
   $('#login').hidden=false;$('#login').innerHTML=`<div class="lbox"><div class="brand" style="padding:0 0 14px"><span class="mark"></span><div><b>Pelúcias Flamengo</b><small>Acesso ao sistema</small></div></div>
@@ -1177,10 +1209,10 @@ async function entrou_(){
   const {data:{user}}=await SB.auth.getUser();if(!user)return telaLogin();
   const {data:u}=await SB.from('usuarios').select('email,nome,papel,ativo').eq('email',user.email.toLowerCase()).maybeSingle();
   if(!u){telaLogin(`O e-mail <b>${h(user.email)}</b> ainda não está autorizado. Peça ao proprietário para incluir você em Ajustes › Usuários.`);await SB.auth.signOut();return}
-  ME=u;$('#login').hidden=true;$('#me').innerHTML=`${h(u.nome||u.email)} · <button class="lnk" data-act="sair">Sair</button>`;
+  ME=u;$('#login').hidden=true;desenhaMe();
   if(!(await carregar()))return;carregarPDV();
   SB.channel('mudancas').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},pl=>{
-      if(!(pl.new&&pl.new.versao>VERSAO))return;const quem=(pl.new.atualizado_por||'outro usuário').split('@')[0];const hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      if(TESTE||!(pl.new&&pl.new.versao>VERSAO))return;const quem=(pl.new.atualizado_por||'outro usuário').split('@')[0];const hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
       if(!SUJO&&!SALVANDO&&!MODAL){carregar().then(()=>{aviso(`Dados atualizados por <b>${h(quem)}</b> às ${hr}. A tela já mostra a versão nova.`);toast('Chegou atualização de '+quem)})}
       else aviso(`<b>${h(quem)}</b> alterou os dados às ${hr}.`,{btn:'Atualizar agora',act:'atualizar'})})
     .on('postgres_changes',{event:'*',schema:'public',table:'pdv_vendas'},()=>{clearTimeout(window._pdvT);window._pdvT=setTimeout(()=>{carregarPDV();aviso('Chegaram novas vendas do PDV das lojas.',{btn:'Ver sell-out',act:'irSellout'})},2000)}).subscribe();
@@ -1346,13 +1378,23 @@ ACT.salvaMkt=()=>{lerMkt();const a=PM;if(!a.nome)return toast('Dê um nome à a�
 ACT.delMkt=(d,b)=>{if(S.pagar.some(t=>t.origem==='mkt'&&t.ref===PM.id&&t.pago))return toast('Há despesas pagas desta ação. Marque como cancelada em vez de excluir.','err');if(!armed(b))return;
   S.pagar=S.pagar.filter(t=>!(t.origem==='mkt'&&t.ref===PM.id));S.mkt=S.mkt.filter(a=>a.id!==PM.id);save();closeModal();render()};
 
+
+/* ============ ambiente de teste dentro da versão real ============ */
+function desenhaMe(){if(!SB||!ME)return;$('#me').innerHTML=`${h(ME.nome||ME.email)} · <button class="lnk" data-act="sair">Sair</button><br>${TESTE?'<button class="lnk" data-act="sairTeste">↩ Voltar ao sistema real</button>':'<button class="lnk" data-act="entrarTeste">🧪 Ambiente de teste</button>'}`}
+ACT.entrarTeste=()=>{if(SUJO||SALVANDO)return toast('Aguarde: ainda estou salvando a sua última alteração.','err');
+  TESTE=true;let o=null;try{o=JSON.parse(localStorage.getItem(KEY_T)||'null')}catch(e){}
+  if(o&&o.cfg){S=Object.assign(blank(),o);S.cfg={...DEF,...o.cfg}}else seed();
+  document.body.classList.add('modo-teste');$('#brandSub').textContent='AMBIENTE DE TESTE';setSt('🧪 Teste: nada vai para o sistema real','warn');desenhaMe();$('#aviso').hidden=true;
+  UI.dre=null;location.hash='#painel';render();toast('Ambiente de teste aberto','okk')};
+ACT.sairTeste=async()=>{if(!SB){return}TESTE=false;document.body.classList.remove('modo-teste');desenhaMe();UI.dre=null;await carregar();await carregarPDV();location.hash='#painel';toast('De volta ao sistema real','okk')};
+
 /* ============ avisos de atualização ============ */
 function aviso(html,o={}){const a=$('#aviso');a.className=o.novo?'novo':'';a.hidden=false;
   a.innerHTML=`<span>🔔 ${html}</span><span class="acts">${o.btn?`<button class="btn sm pri" data-act="${o.act}">${o.btn}</button>`:''}<button class="btn sm" data-act="avisoX">Fechar</button></span>`}
 ACT.avisoX=()=>{$('#aviso').hidden=true};
 ACT.irSellout=()=>{$('#aviso').hidden=true;location.hash='#sellout'};
 ACT.novaVersao=()=>location.reload();
-ACT.atualizar=async(d,b)=>{if(!SB){render();return toast('Tela atualizada','okk')}
+ACT.atualizar=async(d,b)=>{if(!SB||TESTE){render();return toast('Tela atualizada','okk')}
   if(SUJO||SALVANDO)return toast('Aguarde: ainda estou salvando a sua última alteração.','err');
   if(b)b.disabled=true;const ok=await carregar();await carregarPDV();if(b&&b.isConnected)b.disabled=false;
   $('#aviso').hidden=true;checaVersao();if(ok)toast('Dados atualizados agora','okk')};
