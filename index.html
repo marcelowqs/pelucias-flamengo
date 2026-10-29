@@ -215,17 +215,17 @@ function toast(msg,cls=''){const d=document.createElement('div');d.textContent=m
 function armed(b,label='Confirmar?'){if(b.dataset.armed)return true;b.dataset.armed='1';const t=b.textContent;b.textContent=label;setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent=t}},3500);return false}
 
 /* ============ estado ============ */
-const APP_VER='20261029-122444';
+const APP_VER='20261029-123242';
 const KEY='mfplai_pelucias_fla_v1';
 const DEF={empresa:'MF Plai',totalRede:184,royaltyPct:15,royaltyBase:'bruta',icms:20,icmsCredito:0,pis:0.65,cofins:3,irpj:2.28,outrosImp:0,
   comissaoPadrao:5,prazoPadrao:'30/60/90',multA:1.5,multB:1,multC:0.6,diasReposicao:30,armazemMensal:0,armazemPorPeca:0.3,freteSaidaPct:3,
   leadTime:90,segDias:30,coberturaDias:90,taxaFinMes:1.8,despFixasMes:0,diaVencFixos:10,saldoCaixa:0,diasFreteVenda:15,
-  descCartao:3,descPix:7,tarifaBoleto:0,prazoCartao:'30',prazoPix:'0',coberturaLoja:30,entregaLoja:7,taxaB2B:0,
+  descCartao:3,descPix:7,tarifaBoleto:0,prazoCartao:'30',prazoPix:'0',coberturaLoja:30,entregaLoja:7,taxaB2B:0,diaVencImpostos:20,
   cartaoTaxas:[3.2,4,4.6,5.3,5.9,6.5,7.2,7.8,8.4,9],cartaoMin2:600,cartaoMin3:1000,spreadCartao:2,taxaAntecipacao:1.6};
 const taxaCartao=N=>n((S.cfg.cartaoTaxas||DEF.cartaoTaxas)[N-1]);
 const maxParc=v=>v>=n(S.cfg.cartaoMin3)?10:v>=n(S.cfg.cartaoMin2)?2:1;
 function parcOpcoes(v){return [...Array(maxParc(v))].map((_,i)=>{const N=i+1;const jur=N>=4?taxaCartao(N)+n(S.cfg.spreadCartao):0;const tot=r2(v*(1+jur/100));return {N,jur,tot,parc:r2(tot/N)}})}
-const blank=()=>({v:1,cfg:{...DEF},produtos:[],fornecedores:[],transportadoras:[],sellout:[],reps:[],gestores:[],compras:[],pedidos:[],mixes:[],movs:[],pagar:[],contratos:[],seq:{ped:0,comp:0,mov:0},exemplo:false});
+const blank=()=>({v:1,cfg:{...DEF},fixas:[],mkt:[],produtos:[],fornecedores:[],transportadoras:[],sellout:[],reps:[],gestores:[],compras:[],pedidos:[],mixes:[],movs:[],pagar:[],contratos:[],seq:{ped:0,comp:0,mov:0},exemplo:false});
 const FORMAS={boleto:'Boleto',cartao:'Cartão de crédito',pix:'Pix'};
 const CANAIS={direta:'Venda direta',representante:'Representante',b2b:'Site B2B'};
 const descForma=f=>f==='pix'?n(S.cfg.descPix):f==='cartao'?n(S.cfg.descCartao):0;
@@ -330,7 +330,7 @@ function dreRows(d,ext){
   ${d.acr?`<tr><td>Juros do parcelamento pagos pelo lojista${d.N?` (${d.N}x)`:''}</td><td class="n ok">+ ${R(d.acr)}</td><td class="n mut">${pc(d.acr)}</td></tr>`:''}
   <tr class="t big"><td>Margem de contribuição</td><td class="n">${R(d.mc)}</td><td class="n">${pc(d.mc)}</td></tr>`;
   if(ext){s+=`${ext.compl?row('Mínimo garantido não coberto pelas vendas (pró-rata)',ext.compl):''}
-  ${row('Bloco 39 – custo fixo do armazém',ext.arm)}${row('Despesas fixas da operação',ext.fix)}
+  ${ext.cats.length?`<tr class="t"><td>Despesas fixas</td><td class="n">− ${R(ext.fix)}</td><td class="n mut">${pc(ext.fix)}</td></tr>`+ext.cats.map(x=>row(h(x.cat),x.v,'sub')).join(''):row('Despesas fixas (cadastre em Contas a pagar)',0)}
   <tr class="t big"><td>Resultado operacional</td><td class="n ${ext.res<0?'bad':''}">${R(ext.res)}</td><td class="n">${pc(ext.res)}</td></tr>`}
   return s+'</tbody></table>';
 }
@@ -399,11 +399,11 @@ function royResumo(ct){
 function receberLista(){return S.pedidos.filter(p=>p.baixado).flatMap(p=>(p.parcelas||[]).map((x,j)=>({p,x,j,n:p.parcelas.length})))}
 
 /* ============ navegação ============ */
-const NAV=[['Operação',[['painel','Painel'],['pedidos','Pedidos'],['lojistas','Lojistas'],['sellout','Sell-out (PDV)'],['mix','Mix e reposição']]],
+const NAV=[['Operação',[['painel','Painel'],['pedidos','Pedidos'],['ranking','Ranking'],['lojistas','Lojistas'],['sellout','Sell-out (PDV)'],['mix','Mix e reposição'],['marketing','Marketing']]],
  ['Produto e logística',[['pelucias','Pelúcias'],['estoque','Estoque Bloco 39'],['compras','Compras'],['fornecedores','Fornecedores'],['transportadoras','Transportadoras']]],
  ['Financeiro',[['receber','Contas a receber'],['pagar','Contas a pagar'],['fluxo','Fluxo de caixa'],['royalties','Royalties'],['dre','DRE']]],
  ['Cadastros',[['contratos','Contratos'],['reps','Representantes'],['ajustes','Ajustes e backup']]]];
-let cur='painel';const UI={pedSt:'abertos',recF:'abertos',pagF:'abertos',compSt:'todas',q:'',open:new Set(),dre:null};
+let cur='painel';const UI={rk:{tab:'gestor',per:'mes',met:'receita',uf:'',canal:''},lojOrd:'lojas',pedSt:'abertos',recF:'abertos',pagF:'abertos',compSt:'todas',q:'',open:new Set(),dre:null};
 function drawNav(){
   const t=today();
   const venc={receber:receberLista().filter(o=>!o.x.pago&&o.x.venc<t).length,pagar:S.pagar.filter(x=>!x.pago&&x.venc<t).length};
@@ -509,12 +509,12 @@ VIEWS.pedidos=()=>{
 
 VIEWS.lojistas=()=>{
   const q=UI.q.toLowerCase();const fat=pedFat();
-  const gs=S.gestores.filter(g=>!q||[g.nome,g.grupo,...(g.lojas||[]).flatMap(l=>[l.nome,l.cnpj,fmtCNPJ(l.cnpj),l.cidade,l.uf,l.razao,l.comprador?.nome])].join(' ').toLowerCase().includes(q)).sort((a,b)=>a.nome.localeCompare(b.nome));
+  const gs=S.gestores.filter(g=>!q||[g.nome,g.grupo,...(g.lojas||[]).flatMap(l=>[l.nome,l.cnpj,fmtCNPJ(l.cnpj),l.cidade,l.uf,l.razao,l.comprador?.nome])].join(' ').toLowerCase().includes(q)).sort((a,b)=>UI.lojOrd==='az'?a.nome.localeCompare(b.nome):((b.lojas||[]).length-(a.lojas||[]).length)||(n(b.qtdLojas)-n(a.qtdLojas))||a.nome.localeCompare(b.nome));
   const lojas=allLojas();const posit=new Set(fat.map(p=>p.lojaId));
   return `<div class="head"><div><h1>Lojistas</h1><p>Gestor → lojas (cada loja com seu CNPJ). Cadastre o gestor primeiro e depois abra as lojas dele.</p></div>
    <div class="acts"><button class="btn" data-act="importar">Importar lista</button><button class="btn pri" data-act="novoGestor">+ Gestor</button></div></div>
   <div class="kpis">${kpi('Gestores',S.gestores.length,`${S.gestores.filter(g=>g.status==='prospect').length} em prospecção`)}${kpi('Lojas cadastradas',`${lojas.length}<span class="mut" style="font-size:16px"> / ${S.cfg.totalRede}</span>`,'meta: rede oficial de lojas')}${kpi('Lojas informadas pelos gestores',N(sum(S.gestores,g=>Math.max(n(g.qtdLojas),(g.lojas||[]).length))),'soma do que cada gestor declarou ter')}${kpi('Lojas que já compraram',posit.size,lojas.length?P(posit.size/lojas.length*100)+' das cadastradas':'')}</div>
-  <input id="busca" data-chg="busca" placeholder="Buscar gestor, loja, CNPJ ou cidade" value="${h(UI.q)}">
+  <div class="row"><input id="busca" data-chg="busca" placeholder="Buscar gestor, loja, CNPJ, razão social ou cidade" value="${h(UI.q)}" style="flex:1;min-width:220px"><div class="seg"><span class="sm mut" style="align-self:center">Ordenar:</span>${[['lojas','Mais lojas'],['az','A–Z']].map(([k,l])=>`<button class="${UI.lojOrd===k?'on':''}" data-act="lojOrd" data-v="${k}">${l}</button>`).join('')}</div></div>
   <div class="list">${gs.map(g=>{const ls=g.lojas||[];const op=UI.open.has(g.id);const vend=sum(fat.filter(p=>ls.some(l=>l.id===p.lojaId)),p=>dreCalc(p).bruto);const inf=Math.max(n(g.qtdLojas),ls.length);
    return `<div class="gcard"><div class="gh" data-act="togG" data-id="${g.id}"><div><b>${h(g.nome)}</b> ${g.grupo?`<span class="mut">· ${h(g.grupo)}</span>`:''}<div class="sm mut">${h([g.telefone,g.cidade&&g.cidade+(g.uf?'/'+g.uf:''),rep(g.repId)?.nome&&'Rep.: '+rep(g.repId).nome].filter(Boolean).join(' · '))}</div></div>
     <div class="row" style="gap:8px">${chip(`${ls.length} de ${inf||'?'} lojas`,ls.length<inf?'c-warn':'c-ok')}${g.status==='prospect'?chip('Prospecção','c-info'):g.status==='inativo'?chip('Inativo','c-bad'):''}${vend?chip(RK(vend)+' comprado','c-gold'):''}<span class="mut">${op?'▴':'▾'}</span></div></div>
@@ -600,21 +600,22 @@ function antecipar(p,x){const a=antCalc(x);x.pago=true;x.pagoEm=today();x.anteci
 ACT.antUma=d=>{const p=S.pedidos.find(x=>x.id===d.p);const x=p.parcelas.find(y=>y.id===d.x);const a=antecipar(p,x);save();render();toast(`Antecipado: ${R(a.hoje)} hoje (custo ${R(a.custo)})`,'okk')};
 ACT.antTodas=(d,b)=>{if(!armed(b,'Confirmar antecipação'))return;let h_=0,c_=0;receberLista().filter(o=>!o.x.pago&&o.x.cartao).forEach(o=>{const a=antecipar(o.p,o.x);h_+=a.hoje;c_+=a.custo});save();render();toast(`Antecipado ${R(h_)} (custo ${R(c_)})`,'okk')};
 
-const ORIG={compra:'Compra',mg:'Mínimo garantido',royexc:'Royalty excedente',comissao:'Comissão',frete:'Frete de venda',fixo:'Fixo do mês',manual:'Manual'};
+const ORIG={mkt:'Marketing',fixa:'Despesa fixa',imposto:'Imposto',compra:'Compra',mg:'Mínimo garantido',royexc:'Royalty excedente',comissao:'Comissão',frete:'Frete de venda',fixo:'Fixo do mês',manual:'Manual'};
 VIEWS.pagar=()=>{
   const t=today(),f=UI.pagF;const all=S.pagar;
   const flt={abertos:x=>!x.pago,vencidos:x=>!x.pago&&x.venc<t,pagos:x=>x.pago,todos:()=>true};
   const ls=all.filter(flt[f]).sort((a,b)=>a.venc.localeCompare(b.venc));const ab=all.filter(x=>!x.pago);
   const cats=[...new Set(ab.map(x=>x.cat||'Outros'))].map(c=>({c,v:sum(ab.filter(x=>(x.cat||'Outros')===c),x=>x.valor)})).sort((a,b)=>b.v-a.v);
-  return `<div class="head"><div><h1>Contas a pagar</h1><p>Fornecedores, royalties ao clube, comissões, fretes e custos do Bloco 39</p></div><div class="acts"><button class="btn" data-act="fixosMes">Lançar fixos do mês</button><button class="btn pri" data-act="editPagar">+ Conta a pagar</button></div></div>
+  return `<div class="head"><div><h1>Contas a pagar</h1><p>Fornecedores, royalties ao clube, comissões, fretes e custos do Bloco 39</p></div><div class="acts"><button class="btn pri" data-act="editPagar">+ Conta a pagar</button></div></div>
   <div class="kpis">${kpi('Em aberto',RK(sum(ab,x=>x.valor)),ab.length+' títulos','hl')}${kpi('Vencido',RK(sum(ab.filter(x=>x.venc<t),x=>x.valor)))}${kpi('Próximos 30 dias',RK(sum(ab.filter(x=>x.venc>=t&&x.venc<=addDays(t,30)),x=>x.valor)))}${kpi('Pago no mês',RK(sum(all.filter(x=>x.pago&&mkey(x.pagoEm)===mkey(t)),x=>x.valor)))}</div>
+  ${blocoFixas()}
   ${cats.length?`<div class="card"><h3>Em aberto por categoria</h3>${cats.map(x=>`<div class="hb"><span>${h(x.c)}</span>${mbar(x.v,cats[0].v)}<span class="num">${R(x.v)}</span></div>`).join('')}</div>`:''}
   <div class="seg">${[['abertos','Em aberto'],['vencidos','Vencidos'],['pagos','Pagos'],['todos','Todos']].map(([k,l])=>`<button class="${f===k?'on':''}" data-act="pagF" data-k="${k}">${l}</button>`).join('')}</div>
   <div class="card"><div class="tw"><table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Favorecido</th><th>Origem</th><th class="n">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
   ${ls.map(x=>{const venc=!x.pago&&x.venc<t;return `<tr><td>${D(x.venc)}</td><td class="click" data-act="editPagar" data-id="${x.id}" style="cursor:pointer"><b>${h(x.desc)}</b><div class="sm mut">${h(x.cat||'')}</div></td><td>${h(x.fav||'')}</td><td>${chip(ORIG[x.origem]||x.origem,x.origem==='mg'||x.origem==='royexc'?'c-gold':'')}</td><td class="n">${R(x.valor)}</td><td>${x.pago?chip('Pago '+D(x.pagoEm),'c-ok'):venc?chip(diffDays(x.venc,t)+' d vencido','c-bad'):chip('A vencer')}</td>
   <td class="n">${x.pago?`<button class="btn sm" data-act="pagUndo" data-id="${x.id}">Estornar</button>`:`<button class="btn sm pri" data-act="pagOk" data-id="${x.id}">Pagar</button>`}</td></tr>`}).join('')||'<tr><td colspan="7" class="mut">Nada aqui.</td></tr>'}
   </tbody>${ls.length?`<tfoot><tr><td colspan="4">${ls.length} título(s)</td><td class="n">${R(sum(ls,x=>x.valor))}</td><td colspan="2"></td></tr></tfoot>`:''}</table></div></div>
-  <p class="note">Gerados automaticamente: parcelas das compras (pela condição de pagamento), frete/despesas da importação, parcelas do mínimo garantido do contrato de licença, frete dos pedidos faturados. Royalties excedentes e comissões são lançados nas telas Royalties e Representantes.</p>`;
+  <p class="note">Entram sozinhos: parcelas das compras, frete da importação, parcelas do mínimo garantido, frete dos pedidos faturados e despesas das ações de marketing. Com um clique: despesas fixas do mês e impostos do mês (acima), royalties excedentes (Royalties) e comissões (Representantes).</p>`;
 };
 
 VIEWS.fluxo=()=>{
@@ -660,7 +661,9 @@ VIEWS.dre=()=>{
   const filtrado=F.rep||F.gest;
   let compl=0;const l=licAtiva();
   if(l&&!filtrado){const lf=l.fim||addMonths(l.inicio,12);const a=ini>l.inicio?ini:l.inicio,b=fim<lf?fim:lf;if(a<=b){const mm=monthsSpan(a,b);const mgPr=n(l.mg)/monthsSpan(l.inicio,lf)*mm;const roy=sum(pedFat().filter(p=>p.faturadoEm>=a&&p.faturadoEm<=b),p=>dreCalc(p).roy);compl=Math.max(0,mgPr-roy)}}
-  const ext=filtrado?null:{compl,arm:n(S.cfg.armazemMensal)*meses,fix:n(S.cfg.despFixasMes)*meses};if(ext)ext.res=d.mc-ext.compl-ext.arm-ext.fix;
+  let cats_=fixasPeriodo(ini,fim);if(!cats_.length)cats_=[['Bloco 39 – armazém',n(S.cfg.armazemMensal)*meses],['Despesas fixas',n(S.cfg.despFixasMes)*meses]].filter(x=>x[1]>0).map(([cat,v])=>({cat,v}));
+  const mktV=sum((S.mkt||[]).flatMap(a=>a.despesas||[]).filter(x=>x.venc>=ini&&x.venc<=fim),x=>n(x.valor));if(mktV)cats_.push({cat:'Marketing (ações)',v:mktV});
+  const ext=filtrado?null:{compl,cats:cats_,fix:sum(cats_,x=>x.v)};if(ext)ext.res=d.mc-ext.compl-ext.fix;
   const porModelo={};ps.forEach(p=>dreCalc(p).itens.forEach(i=>{const o=porModelo[i.pid]||(porModelo[i.pid]={q:0,b:0,mc:0});o.q+=i.qtd;o.b+=i.bruto;o.mc+=i.mc}));
   const grpBy=(key)=>{const o={};ps.forEach(p=>{const k=key(p);const dd=dreCalc(p);const x=o[k]||(o[k]={b:0,mc:0,com:0,n:0});x.b+=dd.bruto;x.mc+=dd.mc;x.com+=dd.com;x.n++});return Object.entries(o).sort((a,b)=>b[1].b-a[1].b)};
   const mopts=[];for(let i=-18;i<=1;i++)mopts.push(nextMonthKey(mkey(t),i));
@@ -718,8 +721,8 @@ VIEWS.ajustes=()=>{const c=S.cfg;const g=(id,l,o={})=>fld('c_'+id,l,c[id],{t:'nu
    <div class="tw" style="margin-top:12px"><table><thead><tr><th>Parcelas</th>${[...Array(10)].map((_,i)=>`<th class="n">${i+1}x</th>`).join('')}</tr></thead><tbody><tr><td>MDR (%)</td>${[...Array(10)].map((_,i)=>`<td class="n"><input id="c_ct${i+1}" type="number" step="any" class="pr" style="width:70px" value="${taxaCartao(i+1)}" aria-label="MDR ${i+1}x"></td>`).join('')}</tr>
    <tr><td class="mut">Juros ao lojista</td>${[...Array(10)].map((_,i)=>`<td class="n mut">${i>=3?P(taxaCartao(i+1)+n(c.spreadCartao)):'sem juros'}</td>`).join('')}</tr></tbody></table></div></div>
   <div class="card"><h2>Reposição pelo PDV das lojas</h2><div class="fg">${g('coberturaLoja','Cobertura desejada na loja (dias)')}${g('entregaLoja','Prazo de entrega à loja (dias)')}</div></div>
-  <div class="card"><h2>Logística e Bloco 39</h2><div class="fg">${g('armazemMensal','Custo fixo do Bloco 39 (R$/mês)')}${g('armazemPorPeca','Manuseio/expedição (R$/peça)')}${g('freteSaidaPct','Frete de entrega estimado (% do pedido)')}${g('diasFreteVenda','Vencimento do frete de venda (dias)')}${g('leadTime','Lead time padrão do fornecedor (dias)')}${g('segDias','Estoque de segurança (dias)')}${g('coberturaDias','Cobertura de cada recompra (dias)')}</div></div>
-  <div class="card"><h2>Financeiro</h2><div class="fg">${g('taxaFinMes','Custo do dinheiro (% ao mês)')}${g('despFixasMes','Despesas fixas da operação (R$/mês)')}${g('diaVencFixos','Dia de vencimento dos fixos')}</div></div>
+  <div class="card"><h2>Logística e Bloco 39</h2><div class="fg">${g('armazemMensal','Custo fixo do Bloco 39 (R$/mês)',{hint:'Idem: prefira cadastrar como despesa fixa'})}${g('armazemPorPeca','Manuseio/expedição (R$/peça)')}${g('freteSaidaPct','Frete de entrega estimado (% do pedido)')}${g('diasFreteVenda','Vencimento do frete de venda (dias)')}${g('leadTime','Lead time padrão do fornecedor (dias)')}${g('segDias','Estoque de segurança (dias)')}${g('coberturaDias','Cobertura de cada recompra (dias)')}</div></div>
+  <div class="card"><h2>Financeiro</h2><div class="fg">${g('taxaFinMes','Custo do dinheiro (% ao mês)')}${g('diaVencImpostos','Dia de vencimento dos impostos (mês seguinte)')}${g('despFixasMes','Despesas fixas (R$/mês)',{hint:'Usado no DRE só enquanto não houver despesas fixas cadastradas em Contas a pagar'})}</div></div>
   <div class="card"><h2>Backup</h2><p class="note">Os dados ficam neste navegador. Exporte um backup com frequência e guarde no Drive.</p><div class="acts" style="margin-top:10px"><button class="btn" data-act="exportar">Exportar backup (JSON)</button><label class="btn" for="impFile">Importar backup</label><input id="impFile" type="file" accept=".json,application/json" data-chg="impFile" hidden><button class="btn dng" data-act="zerar">Apagar todos os dados</button></div></div>
   ${SB?`<div class="card"><h2>Usuários com acesso</h2><div id="usrBox" class="note">Carregando…</div></div>`:`<div class="card"><h2>Ambiente de teste</h2><p class="note">${S.exemplo?'Este navegador está com os dados de teste. Restaurar volta tudo ao ponto inicial, apagando o que foi lançado nos testes.':'Este navegador está com dados reais. Os dados de teste só devem ser carregados num navegador ou endereço separado.'}</p><div class="acts" style="margin-top:10px">${S.exemplo?'<button class="btn" data-act="resetTeste">Restaurar dados de teste</button>':''}</div></div>`}`;
 };
@@ -809,6 +812,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
 document.addEventListener('input',e=>{if(MODAL&&MODAL.onInput&&e.target.closest('#modal'))MODAL.onInput(e)});
 document.addEventListener('change',e=>{const t=e.target;if(t.dataset.chg&&CHG[t.dataset.chg])return CHG[t.dataset.chg](t);
   if(MODAL&&MODAL.onChange&&t.closest('#modal'))return MODAL.onChange(e);
+  if(['rk_met','rk_uf','rk_canal'].includes(t.id)){UI.rk[t.id.slice(3)]=t.value;render();return}
   if(['dDe','dAte','dRep','dGest'].includes(t.id)){UI.dre={de:fv('dDe'),ate:fv('dAte'),rep:fv('dRep'),gest:fv('dGest')};if(UI.dre.ate<UI.dre.de)UI.dre.ate=UI.dre.de;render()}});
 const CHG={
   busca:t=>{UI.q=t.value;render();const b=$('#busca');b.focus();b.setSelectionRange(b.value.length,b.value.length)},
@@ -1093,7 +1097,7 @@ ACT.delForn=(d,b)=>{if(S.compras.some(c=>c.fornecedorId===d.id)||S.produtos.some
 /* ---------- Contas a pagar manual ---------- */
 ACT.editPagar=d=>{const x=d.id?S.pagar.find(t=>t.id===d.id):{origem:'manual',desc:'',fav:'',cat:'Despesas operacionais',venc:today(),valor:'',pago:false,obs:''};const auto=x.origem!=='manual';
   const cats=['Compra de mercadoria','Frete de compra','Royalties','Comissões','Frete de venda','Armazenagem','Impostos','Despesas fixas','Despesas operacionais','Marketing','Outros'];
-  openModal(d.id?'Conta a pagar':'Nova conta a pagar',{body:()=>`${auto?`<p class="note">Lançamento automático (${ORIG[x.origem]}). Você pode ajustar vencimento e valor.</p>`:''}<div class="fg">${fld('t_d','Descrição',x.desc,{w:'w2'})}${fld('t_f','Favorecido',x.fav)}${fld('t_c','Categoria',0,{sel:cats.map(c=>opt(c,c,x.cat)).join('')})}${fld('t_v','Vencimento',x.venc,{t:'date'})}${fld('t_val','Valor (R$)',x.valor,{t:'number'})}${fld('t_o','Observações',x.obs,{ta:1,w:'wf'})}</div>`,
+  openModal(d.id?'Conta a pagar':'Nova conta a pagar',{body:()=>`${auto?`<p class="note">Lançamento automático (${ORIG[x.origem]}). Você pode ajustar vencimento e valor.</p>`:''}<div class="fg">${fld('t_d','Descrição',x.desc,{w:'w2'})}${fld('t_f','Favorecido',x.fav)}${fld('t_c','Categoria',0,{sel:[...new Set([...CATS_PAGAR,x.cat].filter(Boolean))].map(c=>opt(c,c,x.cat)).join('')})}${fld('t_v','Vencimento',x.venc,{t:'date'})}${fld('t_val','Valor (R$)',x.valor,{t:'number'})}${fld('t_o','Observações',x.obs,{ta:1,w:'wf'})}</div>`,
    foot:()=>`${d.id&&!x.pago?`<button class="btn dng" data-act="delPagar" data-id="${d.id}">Excluir</button>`:''}<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="salvaPagar" data-id="${d.id||''}">Salvar</button>`})};
 ACT.salvaPagar=d=>{const o={desc:fv('t_d').trim(),fav:fv('t_f'),cat:fv('t_c'),venc:fv('t_v'),valor:n(fv('t_val')),obs:fv('t_o')};if(!o.desc||!o.valor||!o.venc)return toast('Preencha descrição, vencimento e valor.','err');
   if(d.id)Object.assign(S.pagar.find(t=>t.id===d.id),o);else S.pagar.push({id:uid(),origem:'manual',ref:'',pago:false,pagoEm:'',...o});save();closeModal();render();toast('Conta salva','okk')};
@@ -1202,6 +1206,146 @@ ACT.usrAdd=async()=>{const e=fv('us_e').trim().toLowerCase();if(!/^\S+@\S+\.\S+$
 ACT.usrTog=async d=>{const {error}=await SB.from('usuarios').update({ativo:d.a!=='1'}).eq('email',d.e);if(error)toast(error.message,'err');desenharUsuarios()};
 
 
+/* ============ ranking ============ */
+function rkPeriodo(per){const t=today(),m=mkey(t);
+  if(per==='mes')return {ini:m+'-01',fim:t,pIni:nextMonthKey(m,-1)+'-01',pFim:addDays(m+'-01',-1),l:'Mês atual (até hoje)'};
+  if(per==='mesant'){const k=nextMonthKey(m,-1);return {ini:k+'-01',fim:lastDay(k),pIni:nextMonthKey(m,-2)+'-01',pFim:lastDay(nextMonthKey(m,-2)),l:'Mês anterior'}}
+  if(per==='90')return {ini:addDays(t,-89),fim:t,pIni:addDays(t,-179),pFim:addDays(t,-90),l:'Últimos 90 dias'};
+  if(per==='ano'){const y=t.slice(0,4);return {ini:y+'-01-01',fim:t,pIni:(y-1)+'-01-01',pFim:addDays(t,-365),l:'Ano até hoje'}}
+  return {ini:'0000-01-01',fim:'9999-12-31',l:'Todo o período'}}
+VIEWS.ranking=()=>{
+  const F=UI.rk;const pr=rkPeriodo(F.per);const lojasAll=allLojas().filter(o=>(!F.uf||(o.l.uf||'').toUpperCase()===F.uf));
+  const okP=p=>(!F.canal||dreCalc(p).canal===F.canal);
+  const fat=pedFat().filter(okP);const SO=allSellout();
+  const agg=(ini,fim)=>{const m={};fat.filter(p=>p.faturadoEm>=ini&&p.faturadoEm<=fim).forEach(p=>{const d=dreCalc(p);const x=m[p.lojaId]||(m[p.lojaId]={rec:0,pc:0,ped:0,mc:0,ult:''});x.rec+=d.bruto;x.pc+=d.pecas;x.ped++;x.mc+=d.mc;if(p.faturadoEm>x.ult)x.ult=p.faturadoEm});
+    SO.filter(s=>s.data>=ini&&s.data<=fim).forEach(s=>{const x=m[s.lojaId]||(m[s.lojaId]={rec:0,pc:0,ped:0,mc:0,ult:''});x.so=(x.so||0)+n(s.qtd)});return m};
+  const A=agg(pr.ini,pr.fim),B=pr.pIni?agg(pr.pIni,pr.pFim):{};
+  const met={receita:x=>x.rec,pecas:x=>x.pc,margem:x=>x.mc,sellout:x=>x.so||0}[F.met];
+  const metL={receita:'Receita',pecas:'Peças',margem:'Margem de contribuição',sellout:'Sell-out (peças no PDV)'}[F.met];
+  const z={rec:0,pc:0,ped:0,mc:0,so:0,ult:''};
+  let linhas;
+  if(F.tab==='loja')linhas=lojasAll.map(o=>({id:o.l.id,nome:o.l.nome,sub:o.g.nome,uf:o.l.uf,nl:1,a:A[o.l.id]||z,b:B[o.l.id]||z}));
+  else{const gm={};lojasAll.forEach(o=>{const g=gm[o.g.id]||(gm[o.g.id]={id:o.g.id,nome:o.g.nome,ufs:new Set(),nl:0,comp:0,a:{...z},b:{...z}});g.nl++;if(o.l.uf)g.ufs.add(o.l.uf);
+      const a=A[o.l.id],b=B[o.l.id];if(a&&a.ped)g.comp++;[['a',a],['b',b]].forEach(([k,v])=>{if(!v)return;const t=g[k];t.rec+=v.rec;t.pc+=v.pc;t.ped+=v.ped;t.mc+=v.mc;t.so+=(v.so||0);if(v.ult>t.ult)t.ult=v.ult})});
+    linhas=Object.values(gm).map(g=>({...g,uf:[...g.ufs].join(', '),sub:`${g.comp} de ${g.nl} loja(s) compraram`}))}
+  const ativos=linhas.filter(x=>met(x.a)>0).sort((a,b)=>met(b.a)-met(a.a));const sem=linhas.filter(x=>!(met(x.a)>0));
+  const tot=sum(ativos,x=>met(x.a));const mx=Math.max(1,...ativos.map(x=>met(x.a)));
+  const fmt=v=>F.met==='receita'||F.met==='margem'?R(v):N(v);
+  const varr=x=>{if(!pr.pIni)return '';const a=met(x.a),b=met(x.b);if(!b)return a?chip('novo','c-info'):'';const v=(a-b)/Math.abs(b)*100;return `<span class="${v>=0?'ok':'bad'}">${v>=0?'▲':'▼'} ${P(Math.abs(v))}</span>`};
+  const ufs=[...new Set(allLojas().map(o=>(o.l.uf||'').toUpperCase()).filter(Boolean))].sort();
+  return `<div class="head"><div><h1>Ranking de vendas</h1><p>${pr.l} · ${F.tab==='loja'?'por loja':'por gestor'} · ${metL}</p></div></div>
+  <div class="card"><div class="row" style="align-items:flex-end">
+   <div class="seg">${[['gestor','Por gestor'],['loja','Por loja']].map(([k,l])=>`<button class="${F.tab===k?'on':''}" data-act="rk" data-k="tab" data-v="${k}">${l}</button>`).join('')}</div>
+   <div class="seg">${[['mes','Mês atual'],['mesant','Mês anterior'],['90','90 dias'],['ano','Ano'],['tudo','Tudo']].map(([k,l])=>`<button class="${F.per===k?'on':''}" data-act="rk" data-k="per" data-v="${k}">${l}</button>`).join('')}</div></div>
+   <div class="fg" style="margin-top:12px">${fld('rk_met','Ordenar por',0,{sel:[['receita','Receita'],['pecas','Peças'],['margem','Margem de contribuição'],['sellout','Sell-out (PDV)']].map(([k,l])=>opt(k,l,F.met)).join('')})}${fld('rk_uf','UF',0,{sel:opt('','Todas',F.uf)+ufs.map(u=>opt(u,u,F.uf)).join('')})}${fld('rk_canal','Canal',0,{sel:opt('','Todos',F.canal)+Object.entries(CANAIS).map(([k,v])=>opt(k,v,F.canal)).join('')})}</div></div>
+  <div class="kpis">${kpi(F.tab==='loja'?'Lojas que compraram':'Gestores que compraram',`${ativos.length}<span class="mut" style="font-size:16px"> / ${linhas.length}</span>`,linhas.length?P(ativos.length/linhas.length*100)+' de positivação':'','hl')}${kpi('Total — '+metL.toLowerCase(),F.met==='receita'||F.met==='margem'?RK(tot):N(tot))}${kpi('Top 10 concentram',P(tot?sum(ativos.slice(0,10),x=>met(x.a))/tot*100:0),'do total do período')}</div>
+  <div class="card"><div class="tw"><table><thead><tr><th class="n">#</th><th>${F.tab==='loja'?'Loja':'Gestor'}</th><th>UF</th>${F.tab==='gestor'?'<th class="n">Lojas</th>':''}<th class="n">Pedidos</th><th class="n">Peças</th><th class="n">Receita</th><th class="n">MC</th><th class="n">Ticket médio</th>${F.met==='sellout'?'<th class="n">Sell-out</th>':''}<th style="min-width:120px">${metL}</th><th class="n">${pr.pIni?'vs. anterior':''}</th></tr></thead><tbody>
+  ${ativos.map((x,i)=>`<tr><td class="n">${i<3?chip(i+1+'º','c-gold'):i+1+'º'}</td><td><b>${h(x.nome)}</b><div class="sm mut">${h(x.sub||'')}${x.a.ult?' · último faturamento '+D(x.a.ult):''}</div></td><td>${h(x.uf||'')}</td>${F.tab==='gestor'?`<td class="n">${x.nl}</td>`:''}<td class="n">${x.a.ped}</td><td class="n">${N(x.a.pc)}</td><td class="n">${R(x.a.rec)}</td><td class="n ${x.a.mc<0?'bad':''}">${x.a.rec?P(x.a.mc/x.a.rec*100):'—'}</td><td class="n">${x.a.ped?R(x.a.rec/x.a.ped):'—'}</td>${F.met==='sellout'?`<td class="n">${N(x.a.so||0)}</td>`:''}<td>${mbar(met(x.a),mx)}<div class="sm mut">${P(tot?met(x.a)/tot*100:0)} do total</div></td><td class="n">${varr(x)}</td></tr>`).join('')||`<tr><td colspan="12" class="mut">Nenhuma venda no período com estes filtros.</td></tr>`}
+  </tbody></table></div></div>
+  ${sem.length?`<div class="card"><h2>${F.tab==='loja'?'Lojas':'Gestores'} sem venda no período <span class="sm mut">${sem.length}</span></h2><p class="note" style="margin-top:-6px">Oportunidade: ${F.tab==='loja'?'lojas cadastradas que não compraram':'gestores cujas lojas não compraram'} em ${pr.l.toLowerCase()}.</p>
+   <div class="tw"><table><thead><tr><th>${F.tab==='loja'?'Loja':'Gestor'}</th><th>UF</th>${F.tab==='gestor'?'<th class="n">Lojas</th>':''}<th>Última compra (qualquer data)</th><th></th></tr></thead><tbody>
+   ${sem.sort((a,b)=>(b.nl||1)-(a.nl||1)||a.nome.localeCompare(b.nome)).slice(0,UI.rkSemTodos?999:15).map(x=>{const ids=F.tab==='loja'?[x.id]:(gest(x.id)?.lojas||[]).map(l=>l.id);const u=pedFat().filter(p=>ids.includes(p.lojaId)).map(p=>p.faturadoEm).sort().pop();
+    return `<tr><td><b>${h(x.nome)}</b>${F.tab==='loja'?`<div class="sm mut">${h(x.sub)}</div>`:''}</td><td>${h(x.uf||'')}</td>${F.tab==='gestor'?`<td class="n">${x.nl}</td>`:''}<td>${u?D(u):'<span class="mut">nunca</span>'}</td><td class="n">${F.tab==='loja'?`<button class="btn sm" data-act="novoPedido" data-l="${x.id}">Pedido</button>`:''}</td></tr>`}).join('')}</tbody></table></div>
+   ${sem.length>15&&!UI.rkSemTodos?`<button class="btn sm" style="margin-top:8px" data-act="rkSemTodos">Ver todos (${sem.length})</button>`:''}</div>`:''}`;
+};
+ACT.rk=d=>{UI.rk[d.k]=d.v;UI.rkSemTodos=false;render()};
+ACT.rkSemTodos=()=>{UI.rkSemTodos=true;render()};
+ACT.lojOrd=d=>{UI.lojOrd=d.v;render()};
+
+/* ============ despesas fixas e impostos ============ */
+const CATS_PAGAR=['Salários','Encargos (INSS, FGTS)','Pró-labore','Benefícios','Aluguel','Condomínio e IPTU','Bloco 39 – armazém','Contador','Advocacia','Sistemas e software','Energia, telefone e internet','Impostos','Royalties','Comissões','Compra de mercadoria','Frete de compra','Frete de venda','Armazenagem','Marketing','Tarifas bancárias','Despesas operacionais','Outros'];
+const fixaAtiva=(f,k)=>f.ativo!==false&&(!f.inicio||f.inicio<=k)&&(!f.fim||f.fim>=k);
+function fixasPeriodo(ini,fim){const out={};let k=mkey(ini);const kf=mkey(fim);let g=0;
+  while(k<=kf&&g++<240){(S.fixas||[]).forEach(f=>{if(fixaAtiva(f,k))out[f.cat||'Outros']=(out[f.cat||'Outros']||0)+n(f.valor)});k=nextMonthKey(k,1)}
+  return Object.entries(out).map(([cat,v])=>({cat,v})).sort((a,b)=>b.v-a.v)}
+function impostosMes(k){const c=S.cfg;const ps=pedFat().filter(p=>mkey(p.faturadoEm)===k);const b=sum(ps,p=>dreCalc(p).bruto),cm=sum(ps,p=>dreCalc(p).cmv);
+  const icms=b*n(c.icms)/100-cm*n(c.icmsCredito)/100;
+  return [['ICMS',Math.max(0,icms)],['PIS',b*n(c.pis)/100],['COFINS',b*n(c.cofins)/100],['IRPJ + CSLL',b*n(c.irpj)/100],['Outros impostos',b*n(c.outrosImp)/100]].filter(x=>x[1]>0.005).map(([nm,v])=>({nm,v:r2(v)}))}
+function blocoFixas(){const k=mkey(today());const fx=S.fixas||[];const at=fx.filter(f=>fixaAtiva(f,k));
+  return `<div class="card"><h2>Despesas fixas mensais <span class="acts"><button class="btn sm" data-act="lancFixas">Lançar despesas do mês</button><button class="btn sm" data-act="lancImp">Lançar impostos do mês</button><button class="btn sm pri" data-act="editFixa">+ Despesa fixa</button></span></h2>
+  ${fx.length?`<div class="tw"><table><thead><tr><th>Despesa</th><th>Categoria</th><th>Favorecido</th><th class="n">Dia</th><th class="n">Valor mensal</th><th>Situação</th></tr></thead><tbody>
+  ${fx.slice().sort((a,b)=>(a.cat||'').localeCompare(b.cat||'')||n(b.valor)-n(a.valor)).map(f=>`<tr class="click" data-act="editFixa" data-id="${f.id}"><td><b>${h(f.desc)}</b></td><td>${h(f.cat||'')}</td><td>${h(f.fav||'')}</td><td class="n">${n(f.dia)||'—'}</td><td class="n">${R(f.valor)}</td><td>${fixaAtiva(f,k)?chip('Ativa','c-ok'):chip(f.ativo===false?'Pausada':'Fora da vigência')}</td></tr>`).join('')}
+  </tbody><tfoot><tr><td colspan="4">Total mensal das ativas (${at.length})</td><td class="n">${R(sum(at,f=>n(f.valor)))}</td><td></td></tr></tfoot></table></div>`:'<p class="note">Cadastre salários, encargos, aluguel, contador, sistemas e o que mais se repete todo mês. Depois é um clique para lançar o mês inteiro em Contas a pagar, e o DRE passa a mostrar cada categoria.</p>'}</div>`}
+ACT.editFixa=d=>{const f=d.id?S.fixas.find(x=>x.id===d.id):{desc:'',cat:'Salários',fav:'',valor:'',dia:5,inicio:mkey(today()),fim:'',ativo:true,obs:''};
+  openModal(d.id?'Despesa fixa':'Nova despesa fixa',{body:()=>`<div class="fg">${fld('fx_d','Descrição',f.desc,{w:'w2',ph:'Ex.: Salário auxiliar de estoque'})}${fld('fx_c','Categoria',0,{sel:CATS_PAGAR.map(c=>opt(c,c,f.cat)).join('')})}${fld('fx_f','Favorecido',f.fav)}${fld('fx_v','Valor mensal (R$)',f.valor,{t:'number'})}${fld('fx_dia','Dia de vencimento',f.dia,{t:'number'})}
+   ${fld('fx_i','A partir de',f.inicio,{t:'month'})}${fld('fx_fim','Até (opcional)',f.fim,{t:'month'})}${fld('fx_a','Situação',0,{sel:opt('1','Ativa',f.ativo!==false?'1':'0')+opt('0','Pausada',f.ativo!==false?'1':'0')})}${fld('fx_o','Observações',f.obs,{ta:1,w:'wf'})}</div>`,
+   foot:()=>`${d.id?`<button class="btn dng" data-act="delFixa" data-id="${d.id}">Excluir</button>`:''}<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="salvaFixa" data-id="${d.id||''}">Salvar</button>`})};
+ACT.salvaFixa=d=>{const o={desc:fv('fx_d').trim(),cat:fv('fx_c'),fav:fv('fx_f').trim(),valor:n(fv('fx_v')),dia:Math.min(31,Math.max(1,n(fv('fx_dia'))||5)),inicio:fv('fx_i'),fim:fv('fx_fim'),ativo:fv('fx_a')==='1',obs:fv('fx_o')};
+  if(!o.desc||!o.valor)return toast('Preencha a descrição e o valor.','err');S.fixas=S.fixas||[];
+  if(d.id)Object.assign(S.fixas.find(x=>x.id===d.id),o);else S.fixas.push({id:uid(),...o});save();closeModal();render();toast('Despesa fixa salva','okk')};
+ACT.delFixa=(d,b)=>{if(!armed(b))return;S.fixas=S.fixas.filter(x=>x.id!==d.id);save();closeModal();render()};
+const vencDia=(k,dia)=>{const ld=+lastDay(k).slice(8);return k+'-'+pad(Math.min(ld,Math.max(1,n(dia)||10)))};
+ACT.lancFixas=()=>{const k0=mkey(today());const meses=[nextMonthKey(k0,-1),k0,nextMonthKey(k0,1)];UI.lfK=UI.lfK||k0;
+  const corpo=()=>{const k=UI.lfK;const fs=(S.fixas||[]).filter(f=>fixaAtiva(f,k));const ja=f=>S.pagar.some(t=>t.origem==='fixa'&&t.ref===f.id&&t.key===k);
+    return `${fld('lf_k','Mês',0,{sel:meses.map(m=>opt(m,ML(m),k)).join('')})}${fs.length?`<div class="tw"><table><thead><tr><th>Despesa</th><th>Vencimento</th><th class="n">Valor</th><th></th></tr></thead><tbody>${fs.map(f=>`<tr><td>${h(f.desc)}<div class="sm mut">${h(f.cat)}</div></td><td>${D(vencDia(k,f.dia))}</td><td class="n">${R(f.valor)}</td><td>${ja(f)?chip('já lançada','c-ok'):chip('nova','c-gold')}</td></tr>`).join('')}</tbody><tfoot><tr><td colspan="2">A lançar</td><td class="n">${R(sum(fs.filter(f=>!ja(f)),f=>n(f.valor)))}</td><td></td></tr></tfoot></table></div>`:'<p class="note">Nenhuma despesa fixa ativa neste mês.</p>'}`};
+  openModal('Lançar despesas fixas',{body:corpo,onChange:e=>{if(e.target.id==='lf_k'){UI.lfK=e.target.value;drawModal()}},foot:()=>`<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="lfOk">Lançar em Contas a pagar</button>`})};
+ACT.lfOk=()=>{const k=UI.lfK;let q=0;(S.fixas||[]).filter(f=>fixaAtiva(f,k)).forEach(f=>{if(S.pagar.some(t=>t.origem==='fixa'&&t.ref===f.id&&t.key===k))return;
+    S.pagar.push({id:uid(),origem:'fixa',ref:f.id,key:k,desc:`${f.desc} – ${ML(k)}`,fav:f.fav||'',cat:f.cat,venc:vencDia(k,f.dia),valor:n(f.valor),pago:false,pagoEm:''});q++});
+  save();closeModal();render();toast(q?`${q} despesa(s) de ${ML(k)} lançada(s)`:'Nada novo para lançar neste mês.',q?'okk':'')};
+ACT.lancImp=()=>{const k0=nextMonthKey(mkey(today()),-1);UI.liK=UI.liK||k0;const meses=[nextMonthKey(mkey(today()),-2),k0,mkey(today())];
+  const corpo=()=>{const k=UI.liK;const im=impostosMes(k);const ja=x=>S.pagar.some(t=>t.origem==='imposto'&&t.ref===x.nm&&t.key===k);const venc=vencDia(nextMonthKey(k,1),S.cfg.diaVencImpostos);
+    return `${fld('li_k','Vendas de',0,{sel:meses.map(m=>opt(m,ML(m),k)).join('')})}<p class="note">Calculado sobre as vendas faturadas no mês com as alíquotas de Ajustes. Vencimento em ${D(venc)}. Confira com o contador antes de pagar.</p>
+    ${im.length?`<div class="tw"><table><thead><tr><th>Imposto</th><th class="n">Valor</th><th></th></tr></thead><tbody>${im.map(x=>`<tr><td>${x.nm}</td><td class="n">${R(x.v)}</td><td>${ja(x)?chip('já lançado','c-ok'):chip('novo','c-gold')}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="n">${R(sum(im,x=>x.v))}</td><td></td></tr></tfoot></table></div>`:'<p class="note">Sem vendas faturadas neste mês.</p>'}`};
+  openModal('Lançar impostos do mês',{body:corpo,onChange:e=>{if(e.target.id==='li_k'){UI.liK=e.target.value;drawModal()}},foot:()=>`<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="liOk">Lançar em Contas a pagar</button>`})};
+ACT.liOk=()=>{const k=UI.liK;const venc=vencDia(nextMonthKey(k,1),S.cfg.diaVencImpostos);let q=0;
+  impostosMes(k).forEach(x=>{if(S.pagar.some(t=>t.origem==='imposto'&&t.ref===x.nm&&t.key===k))return;S.pagar.push({id:uid(),origem:'imposto',ref:x.nm,key:k,desc:`${x.nm} – vendas de ${ML(k)}`,fav:'Receita / SEFAZ',cat:'Impostos',venc,valor:x.v,pago:false,pagoEm:''});q++});
+  save();closeModal();render();toast(q?`${q} imposto(s) lançado(s)`:'Nada novo para lançar.',q?'okk':'')};
+
+/* ============ marketing ============ */
+const MKT_TIPOS=['Ativação em loja','Material de PDV / vitrine','Redes sociais','Influenciador','Evento / jogo no Maracanã','Promoção / condição comercial','Catálogo / site B2B','Mídia paga','Treinamento de vendedores','Outro'];
+const MKT_ST={planejada:['Planejada',''],andamento:['Em andamento','c-gold'],concluida:['Concluída','c-ok'],cancelada:['Cancelada','c-bad']};
+function mktLojas(a){const ls=allLojas();if(a.alvo==='gestores')return ls.filter(o=>(a.gestores||[]).includes(o.g.id)).map(o=>o.l.id);
+  if(a.alvo==='uf'){const u=String(a.ufs||'').toUpperCase().split(/[\s,;]+/).filter(Boolean);return ls.filter(o=>u.includes((o.l.uf||'').toUpperCase())).map(o=>o.l.id)}return null}
+function mktVendas(a,ini,fim){const lj=mktLojas(a);const pids=(a.pids||[]).length?a.pids:null;let b=0,pc=0,mc=0,ped=0;
+  pedFat().filter(p=>p.faturadoEm>=ini&&p.faturadoEm<=fim&&(!lj||lj.includes(p.lojaId))).forEach(p=>{const d=dreCalc(p);let tem=false;d.itens.forEach(i=>{if(pids&&!pids.includes(i.pid))return;b+=i.bruto;pc+=i.qtd;mc+=i.mc;tem=true});if(tem)ped++});return {b,pc,mc,ped}}
+function mktResultado(a){if(!a.ini)return null;const fim=a.fim||a.ini;const dur=diffDays(a.ini,fim)+1;const at=mktVendas(a,a.ini,fim<today()?fim:today());
+  const ant=mktVendas(a,addDays(a.ini,-dur),addDays(a.ini,-1));const gasto=sum(a.despesas||[],x=>n(x.valor));const incMC=at.mc-ant.mc;
+  return {at,ant,gasto,incB:at.b-ant.b,incMC,roi:gasto?(incMC-gasto)/gasto*100:null,meta:n(a.meta)}}
+VIEWS.marketing=()=>{const t=today(),y=t.slice(0,4);const as=(S.mkt||[]).slice().sort((a,b)=>(b.ini||'').localeCompare(a.ini||''));
+  const doAno=as.filter(a=>(a.ini||'').startsWith(y));const orc=sum(doAno,a=>n(a.orc)),gasto=sum(doAno,a=>sum(a.despesas||[],x=>n(x.valor)));
+  const and=as.filter(a=>a.status==='andamento'||(a.status!=='cancelada'&&a.ini<=t&&(a.fim||a.ini)>=t));
+  const prox=as.filter(a=>a.status!=='cancelada'&&a.ini>t).sort((a,b)=>a.ini.localeCompare(b.ini));
+  const linha=a=>{const r=mktResultado(a);const st=MKT_ST[a.status]||[a.status,''];return `<tr class="click" data-act="editMkt" data-id="${a.id}"><td><b>${h(a.nome)}</b><div class="sm mut">${h(a.tipo||'')} · ${a.alvo==='gestores'?(a.gestores||[]).length+' gestor(es)':a.alvo==='uf'?'UF '+h(a.ufs||''):'todas as lojas'}${(a.pids||[]).length?' · '+a.pids.length+' modelo(s)':''}</div></td><td>${D(a.ini)} a ${D(a.fim||a.ini)}</td><td>${chip(...st)}</td><td class="n">${R(a.orc)}</td><td class="n ${r&&r.gasto>n(a.orc)&&n(a.orc)?'bad':''}">${R(r?r.gasto:0)}</td><td class="n">${r?R(r.at.b):'—'}</td><td class="n">${r&&(r.at.b||r.ant.b)?`<span class="${r.incB>=0?'ok':'bad'}">${r.incB>=0?'+':'−'} ${R(Math.abs(r.incB))}</span>`:'—'}</td><td class="n">${r&&r.roi!=null?`<b class="${r.roi>=0?'ok':'bad'}">${P(r.roi)}</b>`:'—'}</td></tr>`};
+  return `<div class="head"><div><h1>Marketing</h1><p>Programação das ações, despesas e resultado em vendas</p></div><div class="acts"><button class="btn pri" data-act="editMkt">+ Ação</button></div></div>
+  <div class="kpis">${kpi('Orçamento '+y,RK(orc),doAno.length+' ação(ões) no ano','hl')}${kpi('Gasto lançado '+y,RK(gasto),orc?P(gasto/orc*100)+' do orçamento':'')}${kpi('Em andamento',and.length,and.map(a=>h(a.nome)).slice(0,2).join(', '))}${kpi('Próximas',prox.length,prox[0]?h(prox[0].nome)+' em '+D(prox[0].ini):'nenhuma programada')}</div>
+  ${as.length?`<div class="card"><h2>Ações</h2><div class="tw"><table><thead><tr><th>Ação</th><th>Período</th><th>Status</th><th class="n">Orçamento</th><th class="n">Gasto</th><th class="n">Vendas no período</th><th class="n">vs. período anterior</th><th class="n">Retorno</th></tr></thead><tbody>${as.map(linha).join('')}</tbody></table></div>
+   <p class="note">Vendas = faturamento das lojas e modelos alvo durante a ação. “vs. período anterior” compara com o mesmo número de dias logo antes do início. Retorno = (margem de contribuição a mais − gasto) ÷ gasto. É uma leitura de tendência: outras coisas também mexem nas vendas.</p></div>`:`<div class="empty">Cadastre a primeira ação: tipo, período, lojas alvo, orçamento e meta. As despesas lançadas na ação vão direto para Contas a pagar.</div>`}`};
+let PM=null;
+ACT.editMkt=d=>{PM=d.id?JSON.parse(JSON.stringify(S.mkt.find(a=>a.id===d.id))):{id:null,nome:'',tipo:MKT_TIPOS[0],status:'planejada',ini:today(),fim:addDays(today(),30),alvo:'todas',ufs:'',gestores:[],pids:[],orc:'',meta:'',obs:'',resultado:'',despesas:[]};
+  openModal(d.id?'Ação de marketing':'Nova ação de marketing',{wide:true,body:bodyMkt,onChange:e=>{lerMkt();if(['mk_alvo'].includes(e.target.id))drawModal();else atualizaMkt()},onInput:e=>{if(e.target.closest('#mkDesp')||e.target.id==='mk_gq'){lerMkt();if(e.target.id==='mk_gq')filtraG();else atualizaMkt()}},after:atualizaMkt,
+   foot:()=>`${PM.id?'<button class="btn dng" data-act="delMkt">Excluir</button>':''}<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="salvaMkt">Salvar ação</button>`})};
+function bodyMkt(){const a=PM;const pago=x=>S.pagar.find(t=>t.origem==='mkt'&&t.key===x.id)?.pago;
+  return `<div class="fg">${fld('mk_nome','Nome da ação',a.nome,{w:'w2',ph:'Ex.: Vitrine Dia das Crianças'})}${fld('mk_tipo','Tipo',0,{sel:MKT_TIPOS.map(x=>opt(x,x,a.tipo)).join('')})}${fld('mk_st','Status',0,{sel:Object.entries(MKT_ST).map(([k,v])=>opt(k,v[0],a.status)).join('')})}
+   ${fld('mk_ini','Início',a.ini,{t:'date'})}${fld('mk_fim','Fim',a.fim,{t:'date'})}${fld('mk_orc','Orçamento (R$)',a.orc,{t:'number'})}${fld('mk_meta','Meta de vendas no período (R$)',a.meta,{t:'number'})}
+   ${fld('mk_alvo','Lojas alvo',0,{sel:opt('todas','Todas as lojas',a.alvo)+opt('gestores','Gestores escolhidos',a.alvo)+opt('uf','Estados (UF)',a.alvo)})}${a.alvo==='uf'?fld('mk_ufs','UFs',a.ufs,{ph:'RJ, ES, MG'}):''}</div>
+  ${a.alvo==='gestores'?`<div class="box"><div class="row"><h3 style="margin:0">Gestores (${(a.gestores||[]).length} marcados)</h3><input id="mk_gq" placeholder="Filtrar" style="max-width:220px"></div><div id="mkG" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 12px;max-height:200px;overflow:auto;margin-top:8px">${S.gestores.slice().sort((x,y)=>x.nome.localeCompare(y.nome)).map(g=>`<label class="sm" data-n="${h(g.nome.toLowerCase())}"><input type="checkbox" class="mkg" value="${g.id}" ${(a.gestores||[]).includes(g.id)?'checked':''} style="width:auto"> ${h(g.nome)} <span class="mut">(${(g.lojas||[]).length})</span></label>`).join('')}</div></div>`:''}
+  <div class="box"><h3>Modelos em foco <span class="mut" style="text-transform:none;letter-spacing:0">(nenhum marcado = todos)</span></h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 12px">${S.produtos.filter(p=>p.ativo!==false||(a.pids||[]).includes(p.id)).map(p=>`<label class="sm"><input type="checkbox" class="mkp" value="${p.id}" ${(a.pids||[]).includes(p.id)?'checked':''} style="width:auto"> ${h(p.nome)}</label>`).join('')||'<span class="note">Sem pelúcias cadastradas.</span>'}</div></div>
+  <div class="box"><div class="row"><h3 style="margin:0">Despesas da ação</h3><button class="btn sm" data-act="mkAddD">+ Despesa</button></div>
+   <div class="tw" style="margin-top:8px"><table><thead><tr><th>Descrição</th><th>Fornecedor</th><th class="n">Valor (R$)</th><th>Vencimento</th><th></th></tr></thead><tbody id="mkDesp">${(a.despesas||[]).map((x,j)=>{const pg=pago(x);return `<tr data-id="${x.id}"><td><input class="md" value="${h(x.desc)}" ${pg?'disabled':''} aria-label="Descrição"></td><td><input class="mf" value="${h(x.fav||'')}" ${pg?'disabled':''} aria-label="Fornecedor"></td><td class="n"><input class="pr mv" type="number" step="0.01" value="${x.valor||''}" ${pg?'disabled':''} aria-label="Valor"></td><td><input class="mvc" type="date" value="${x.venc||''}" ${pg?'disabled':''} aria-label="Vencimento"></td><td class="n">${pg?chip('Paga','c-ok'):`<button class="btn sm dng" data-act="mkDelD" data-j="${j}">×</button>`}</td></tr>`}).join('')||''}</tbody></table></div>
+   <p class="note">Cada despesa entra em Contas a pagar (categoria Marketing) ao salvar a ação.</p></div>
+  <div class="box"><h3>Resultado</h3><div id="mkRes"></div></div>
+  <div class="fg">${fld('mk_obs','Descrição e programação (o que, onde, quem faz)',a.obs,{ta:1,w:'w2'})}${fld('mk_resu','Resultados e aprendizados',a.resultado,{ta:1,w:'w2',ph:'O que funcionou, fotos no Drive, retorno das lojas…'})}</div>`}
+function filtraG(){const q=fv('mk_gq').toLowerCase();document.querySelectorAll('#mkG label').forEach(l=>l.hidden=q&&!l.dataset.n.includes(q))}
+function lerMkt(){if(!$('#mk_nome'))return;const a=PM;Object.assign(a,{nome:fv('mk_nome').trim(),tipo:fv('mk_tipo'),status:fv('mk_st'),ini:fv('mk_ini'),fim:fv('mk_fim'),orc:n(fv('mk_orc')),meta:n(fv('mk_meta')),alvo:fv('mk_alvo'),obs:fv('mk_obs'),resultado:fv('mk_resu')});
+  if($('#mk_ufs'))a.ufs=fv('mk_ufs');if($('#mkG'))a.gestores=[...document.querySelectorAll('.mkg:checked')].map(x=>x.value);a.pids=[...document.querySelectorAll('.mkp:checked')].map(x=>x.value);
+  a.despesas=[...document.querySelectorAll('#mkDesp tr')].map(tr=>{const o=(PM.despesas||[]).find(x=>x.id===tr.dataset.id)||{id:tr.dataset.id};return {...o,desc:tr.querySelector('.md').value.trim(),fav:tr.querySelector('.mf').value.trim(),valor:n(tr.querySelector('.mv').value),venc:tr.querySelector('.mvc').value}})}
+function atualizaMkt(){const r=mktResultado(PM);const el=$('#mkRes');if(!el)return;if(!r){el.innerHTML='<p class="note">Informe o período.</p>';return}
+  const lj=mktLojas(PM);el.innerHTML=`<div class="kv" style="max-width:640px"><span>Lojas alvo</span><span>${lj?lj.length:allLojas().length}</span><span>Vendas no período da ação</span><span>${R(r.at.b)} · ${N(r.at.pc)} pç · ${r.at.ped} pedido(s)</span>
+   ${r.meta?`<span>Meta</span><span>${R(r.meta)} · <b class="${r.at.b>=r.meta?'ok':'warn'}">${P(r.at.b/r.meta*100)} atingido</b></span>`:''}<span>Período anterior equivalente</span><span>${R(r.ant.b)} · ${N(r.ant.pc)} pç</span>
+   <span>Vendas a mais</span><span class="${r.incB>=0?'ok':'bad'}">${r.incB>=0?'+':'−'} ${R(Math.abs(r.incB))}</span><span>Margem de contribuição a mais</span><span class="${r.incMC>=0?'ok':'bad'}">${r.incMC>=0?'+':'−'} ${R(Math.abs(r.incMC))}</span>
+   <span>Gasto da ação</span><span>${R(r.gasto)}${n(PM.orc)?` de ${R(PM.orc)} orçados`:''}</span><span><b>Retorno sobre o gasto</b></span><span>${r.roi!=null?`<b class="${r.roi>=0?'ok':'bad'}">${P(r.roi)}</b>`:'—'}</span></div>`}
+ACT.mkAddD=()=>{lerMkt();PM.despesas.push({id:uid(),desc:'',fav:'',valor:'',venc:PM.ini||today()});drawModal()};
+ACT.mkDelD=d=>{lerMkt();PM.despesas.splice(+d.j,1);drawModal()};
+ACT.salvaMkt=()=>{lerMkt();const a=PM;if(!a.nome)return toast('Dê um nome à ação.','err');if(a.fim&&a.fim<a.ini)return toast('O fim não pode ser antes do início.','err');
+  a.despesas=a.despesas.filter(x=>x.desc||x.valor);if(a.despesas.some(x=>!x.valor||!x.venc))return toast('Cada despesa precisa de valor e vencimento.','err');
+  if(!a.id){a.id=uid();S.mkt=S.mkt||[];S.mkt.push(a)}else S.mkt[S.mkt.findIndex(x=>x.id===a.id)]=a;
+  const ids=new Set(a.despesas.map(x=>x.id));S.pagar=S.pagar.filter(t=>!(t.origem==='mkt'&&t.ref===a.id&&!t.pago&&!ids.has(t.key)));
+  a.despesas.forEach(x=>{const t=S.pagar.find(t=>t.origem==='mkt'&&t.key===x.id);const o={desc:`${x.desc} – ${a.nome}`,fav:x.fav,venc:x.venc,valor:n(x.valor),cat:'Marketing'};
+    if(t){if(!t.pago)Object.assign(t,o)}else S.pagar.push({id:uid(),origem:'mkt',ref:a.id,key:x.id,pago:false,pagoEm:'',...o})});
+  save();closeModal();render();toast('Ação salva'+(a.despesas.length?' e despesas em Contas a pagar':''),'okk')};
+ACT.delMkt=(d,b)=>{if(S.pagar.some(t=>t.origem==='mkt'&&t.ref===PM.id&&t.pago))return toast('Há despesas pagas desta ação. Marque como cancelada em vez de excluir.','err');if(!armed(b))return;
+  S.pagar=S.pagar.filter(t=>!(t.origem==='mkt'&&t.ref===PM.id));S.mkt=S.mkt.filter(a=>a.id!==PM.id);save();closeModal();render()};
+
 /* ============ avisos de atualização ============ */
 function aviso(html,o={}){const a=$('#aviso');a.className=o.novo?'novo':'';a.hidden=false;
   a.innerHTML=`<span>🔔 ${html}</span><span class="acts">${o.btn?`<button class="btn sm pri" data-act="${o.act}">${o.btn}</button>`:''}<button class="btn sm" data-act="avisoX">Fechar</button></span>`}
@@ -1242,6 +1386,10 @@ function seed(){
   S.compras=[c1,c2,c3];S.seq.comp=3;
   [c1,c2].forEach(c=>{syncPagarCompra(c);const Ld=landed(c);c.itens.forEach(i=>mov(i.pid,'entrada',i.qtd,Ld.map[i.pid],c.previsao,'Compra '+c.num));c.status='recebido';c.recebidoEm=c.previsao});syncPagarCompra(c3);
   S.pagar.filter(x=>x.venc<addDays(t,-5)).forEach(x=>{x.pago=true;x.pagoEm=x.venc});
+  S.fixas=[['Salários equipe Bloco 39','Salários','',9000,5],['Encargos (INSS, FGTS)','Encargos (INSS, FGTS)','',3600,20],['Aluguel Bloco 39','Bloco 39 – armazém','Locador Exemplo',7500,10],['Contador','Contador','Escritório Contábil Exemplo',1800,10],['Sistemas e internet','Sistemas e software','',450,15]].map(([desc,cat,fav,valor,dia])=>({id:uid(),desc,cat,fav,valor,dia,inicio:nextMonthKey(mkey(t),-3),fim:'',ativo:true,obs:'Exemplo'}));
+  S.mkt=[{id:uid(),nome:'Vitrine Dia das Crianças (exemplo)',tipo:'Material de PDV / vitrine',status:'concluida',ini:addDays(t,-45),fim:addDays(t,-16),alvo:'todas',ufs:'',gestores:[],pids:[],orc:6000,meta:12000,obs:'Adesivos de vitrine e display de balcão nas lojas.',resultado:'',despesas:[{id:uid(),desc:'Produção de adesivos e displays',fav:'Gráfica Exemplo',valor:4200,venc:addDays(t,-40)}]},
+   {id:uid(),nome:'Ativação no Maracanã (exemplo)',tipo:'Evento / jogo no Maracanã',status:'planejada',ini:addDays(t,10),fim:addDays(t,10),alvo:'todas',ufs:'',gestores:[],pids:[],orc:3500,meta:0,obs:'Promotores com pelúcias no entorno do estádio.',resultado:'',despesas:[]}];
+  S.mkt.forEach(a=>a.despesas.forEach(x=>S.pagar.push({id:uid(),origem:'mkt',ref:a.id,key:x.id,desc:`${x.desc} – ${a.nome}`,fav:x.fav,venc:x.venc,valor:x.valor,cat:'Marketing',pago:x.venc<addDays(t,-5),pagoEm:x.venc<addDays(t,-5)?x.venc:''})));
   S.mixes=[{id:uid(),nome:'Mix inicial padrão',itens:[['URB25',12],['URB40',4],['URS30',12],['CHV12',24],['BOL20',6],['ALM35',4],['BEB20',6],['URG30',6]].map(([c,q])=>({pid:pid(c),qtd:q}))},
     {id:uid(),nome:'Reposição giro rápido',itens:[['URB25',12],['CHV12',24],['URS30',6],['URG30',6]].map(([c,q])=>({pid:pid(c),qtd:q}))}];
   const lic={id:uid(),tipo:'licenca',titulo:'Licença Flamengo – pelúcias (exemplo)',parte:'Clube licenciador',fornecedorId:'',repId:'',inicio:mkey(ini)+'-01',fim:addDays(addMonths(mkey(ini)+'-01',12),-1),valor:0,pct:15,mg:240000,periodicidade:'trimestral',diasPagto:15,link:'',anexo:null,obs:'Exemplo: confira percentual, mínimo e datas no contrato real.',mgParcelas:[]};
