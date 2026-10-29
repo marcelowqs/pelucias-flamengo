@@ -138,6 +138,8 @@ input.q{width:78px;text-align:right} input.pr{width:92px;text-align:right}
 .sync{padding:14px 10px 0;margin-top:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
 .lnk{background:none;border:0;padding:0;color:var(--gold);cursor:pointer;text-decoration:underline}
 @media (max-width:900px){.sync{flex-direction:row;gap:10px;padding:6px 16px 0;margin:0;border:0}}
+#aviso{background:var(--infobg);border:1px solid rgba(143,176,217,.45);border-radius:10px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+#aviso.novo{background:var(--goldbg);border-color:var(--gold2)}
 #toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:80;align-items:center;pointer-events:none}
 #toast div{background:var(--s3);border:1px solid var(--line);padding:9px 16px;border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 #toast div.err{border-color:var(--bad);color:var(--bad)}
@@ -169,7 +171,7 @@ input.q{width:78px;text-align:right} input.pr{width:92px;text-align:right}
     <nav id="nav"></nav>
     <div id="syncBox" class="sync" hidden><div id="syncSt" class="sm"></div><div id="me" class="sm mut"></div></div>
   </aside>
-  <main><div class="inner" id="view"></div></main>
+  <main><div class="inner"><div id="aviso" hidden></div><div class="inner" id="view" style="padding:0"></div></div></main>
 </div>
 <div id="modal"></div>
 <div id="login" hidden></div>
@@ -213,6 +215,7 @@ function toast(msg,cls=''){const d=document.createElement('div');d.textContent=m
 function armed(b,label='Confirmar?'){if(b.dataset.armed)return true;b.dataset.armed='1';const t=b.textContent;b.textContent=label;setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent=t}},3500);return false}
 
 /* ============ estado ============ */
+const APP_VER='20261029-122444';
 const KEY='mfplai_pelucias_fla_v1';
 const DEF={empresa:'MF Plai',totalRede:184,royaltyPct:15,royaltyBase:'bruta',icms:20,icmsCredito:0,pis:0.65,cofins:3,irpj:2.28,outrosImp:0,
   comissaoPadrao:5,prazoPadrao:'30/60/90',multA:1.5,multB:1,multC:0.6,diasReposicao:30,armazemMensal:0,armazemPorPeca:0.3,freteSaidaPct:3,
@@ -455,7 +458,7 @@ VIEWS.painel=()=>{
   const baixo=S.produtos.filter(p=>p.ativo!==false&&E[p.id].baixo);
   const repo=lojas.map(o=>{const ps=fat.filter(p=>p.lojaId===o.l.id).sort((a,b)=>b.faturadoEm.localeCompare(a.faturadoEm));return {...o,u:ps[0]}}).filter(o=>o.u&&diffDays(o.u.faturadoEm,t)>=n(S.cfg.diasReposicao)).sort((a,b)=>a.u.faturadoEm.localeCompare(b.u.faturadoEm));
   const ctv=S.contratos.filter(c=>c.fim&&c.fim>=t&&diffDays(t,c.fim)<=60);
-  return `<div class="head"><div><h1>Painel</h1><p>${ML(mes)} · operação de pelúcias licenciadas</p></div><div class="acts"><button class="btn pri" data-act="novoPedido">+ Novo pedido</button></div></div>
+  return `<div class="head"><div><h1>Painel</h1><p>${ML(mes)} · operação de pelúcias licenciadas</p></div><div class="acts"><button class="btn" data-act="atualizar">↻ Atualizar</button><button class="btn pri" data-act="novoPedido">+ Novo pedido</button></div></div>
   <div class="kpis">
    ${kpi('Faturado no mês',RK(dm.bruto),`${dm.n} pedido(s) · ${N(dm.pecas)} peças`,'hl')}
    ${kpi('Margem de contribuição',RK(dm.mc),dm.bruto?P(dm.mcp)+' da receita':'sem vendas no mês')}
@@ -506,7 +509,7 @@ VIEWS.pedidos=()=>{
 
 VIEWS.lojistas=()=>{
   const q=UI.q.toLowerCase();const fat=pedFat();
-  const gs=S.gestores.filter(g=>!q||[g.nome,g.grupo,...(g.lojas||[]).flatMap(l=>[l.nome,l.cnpj,l.cidade])].join(' ').toLowerCase().includes(q)).sort((a,b)=>a.nome.localeCompare(b.nome));
+  const gs=S.gestores.filter(g=>!q||[g.nome,g.grupo,...(g.lojas||[]).flatMap(l=>[l.nome,l.cnpj,fmtCNPJ(l.cnpj),l.cidade,l.uf,l.razao,l.comprador?.nome])].join(' ').toLowerCase().includes(q)).sort((a,b)=>a.nome.localeCompare(b.nome));
   const lojas=allLojas();const posit=new Set(fat.map(p=>p.lojaId));
   return `<div class="head"><div><h1>Lojistas</h1><p>Gestor → lojas (cada loja com seu CNPJ). Cadastre o gestor primeiro e depois abra as lojas dele.</p></div>
    <div class="acts"><button class="btn" data-act="importar">Importar lista</button><button class="btn pri" data-act="novoGestor">+ Gestor</button></div></div>
@@ -516,7 +519,7 @@ VIEWS.lojistas=()=>{
    return `<div class="gcard"><div class="gh" data-act="togG" data-id="${g.id}"><div><b>${h(g.nome)}</b> ${g.grupo?`<span class="mut">· ${h(g.grupo)}</span>`:''}<div class="sm mut">${h([g.telefone,g.cidade&&g.cidade+(g.uf?'/'+g.uf:''),rep(g.repId)?.nome&&'Rep.: '+rep(g.repId).nome].filter(Boolean).join(' · '))}</div></div>
     <div class="row" style="gap:8px">${chip(`${ls.length} de ${inf||'?'} lojas`,ls.length<inf?'c-warn':'c-ok')}${g.status==='prospect'?chip('Prospecção','c-info'):g.status==='inativo'?chip('Inativo','c-bad'):''}${vend?chip(RK(vend)+' comprado','c-gold'):''}<span class="mut">${op?'▴':'▾'}</span></div></div>
     ${op?`<div class="gb"><div class="tw"><table><thead><tr><th>Loja</th><th>CNPJ</th><th>Cidade</th><th>Potencial</th><th>Último pedido</th><th class="n">Comprado</th><th></th></tr></thead><tbody>
-     ${ls.map(l=>{const ps=fat.filter(p=>p.lojaId===l.id).sort((a,b)=>b.faturadoEm.localeCompare(a.faturadoEm));return `<tr><td><b>${h(l.nome)}</b>${l.razao?`<div class="sm mut">${h(l.razao)}</div>`:''}</td><td class="num">${h(fmtCNPJ(l.cnpj))||'<span class="warn">sem CNPJ</span>'} ${l.cnpj&&!cnpjOk(l.cnpj)?chip('CNPJ inválido','c-bad'):''}</td><td>${h(l.cidade||'')}${l.uf?'/'+h(l.uf):''}</td><td>${chip(l.pot||'B','c-gold')}</td><td>${ps[0]?D(ps[0].faturadoEm):'<span class="mut">nunca</span>'}</td><td class="n">${R(sum(ps,p=>dreCalc(p).bruto))}</td><td class="n"><button class="btn sm" data-act="novoPedido" data-l="${l.id}">Pedido</button> <button class="btn sm" data-act="editLoja" data-g="${g.id}" data-id="${l.id}">Editar</button></td></tr>`}).join('')||'<tr><td colspan="7" class="mut">Nenhuma loja cadastrada para este gestor ainda.</td></tr>'}
+     ${ls.map(l=>{const ps=fat.filter(p=>p.lojaId===l.id).sort((a,b)=>b.faturadoEm.localeCompare(a.faturadoEm));return `<tr><td><b>${h(l.nome)}</b>${l.status==='inativa'?' '+chip('Inativa','c-bad'):''}${l.razao?`<div class="sm mut">${h(l.razao)}</div>`:''}${l.comprador?.nome?`<div class="sm mut">Comprador: ${h(l.comprador.nome)}${l.comprador.tel?' · '+h(l.comprador.tel):''}</div>`:''}</td><td class="num">${h(fmtCNPJ(l.cnpj))||'<span class="warn">sem CNPJ</span>'} ${l.cnpj&&!cnpjOk(l.cnpj)?chip('CNPJ inválido','c-bad'):''}</td><td>${h(l.cidade||'')}${l.uf?'/'+h(l.uf):''}</td><td>${chip(l.pot||'B','c-gold')}</td><td>${ps[0]?D(ps[0].faturadoEm):'<span class="mut">nunca</span>'}</td><td class="n">${R(sum(ps,p=>dreCalc(p).bruto))}</td><td class="n"><button class="btn sm" data-act="novoPedido" data-l="${l.id}">Pedido</button> <button class="btn sm" data-act="editLoja" data-g="${g.id}" data-id="${l.id}">Editar</button></td></tr>`}).join('')||'<tr><td colspan="7" class="mut">Nenhuma loja cadastrada para este gestor ainda.</td></tr>'}
      </tbody></table></div><div class="acts" style="margin-top:10px"><button class="btn sm pri" data-act="editLoja" data-g="${g.id}">+ Loja / CNPJ</button><button class="btn sm" data-act="editGestor" data-id="${g.id}">Editar gestor</button></div>${g.obs?`<p class="note">${h(g.obs)}</p>`:''}</div>`:''}</div>`}).join('')||`<div class="empty">Nenhum gestor ${q?'encontrado':'cadastrado'}. Comece por <b>+ Gestor</b> ou importe uma lista.</div>`}</div>`;
 };
 
@@ -768,7 +771,7 @@ ACT.pedSug=d=>ACT.novoPedido({l:d.l,rep:1,sug:1});
 ACT.impSell=()=>openModal('Importar vendas do PDV',{body:()=>`<p class="note">Cole o relatório de vendas do PDV, uma linha por produto/dia, separado por ponto e vírgula ou TAB:<br><b>Data ; CNPJ ou código da loja ; EAN ou código da pelúcia ; Quantidade ; Valor vendido</b><br>Datas em 29/10/2026 ou 2026-10-29. Também aceita o JSON da integração. O mesmo dia, loja e produto substitui o anterior.</p><textarea id="slTxt" style="min-height:200px" placeholder="29/10/2026;12.345.678/0001-90;7890000000017;3;239,70"></textarea><div id="slPrev" class="note"></div>`,
   onInput:()=>{const r=parseSell(fv('slTxt'));$('#slPrev').innerHTML=r.total?`${r.ok.length} linha(s) reconhecida(s)${r.erros.length?` · <span class="bad">${r.erros.length} não reconhecida(s): ${h(r.erros.slice(0,3).join(' | '))}${r.erros.length>3?'…':''}</span>`:''}`:''},
   foot:()=>`<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="slOk">Importar</button>`});
-function achaLoja(x){const dg=onlyDig(x);return allLojas().find(o=>(dg.length===14&&onlyDig(o.l.cnpj)===dg)||(o.l.pdvCod&&o.l.pdvCod===String(x).trim()))}
+function achaLoja(x){const dg=onlyDig(x),s=String(x).trim();return allLojas().find(o=>o.l.pdvCod&&o.l.pdvCod===s)||allLojas().find(o=>dg.length===14&&onlyDig(o.l.cnpj)===dg)}
 function achaProd(x){const s=String(x).trim();const dg=onlyDig(s);return S.produtos.find(p=>(dg&&p.ean===dg)||p.cod===s.toUpperCase())}
 function normData(s){s=String(s).trim();const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);if(m)return (m[3].length===2?'20'+m[3]:m[3])+'-'+pad(m[2])+'-'+pad(m[1]);return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:''}
 function parseSell(txt){const ok=[],erros=[];txt=String(txt).trim();if(!txt)return {ok,erros,total:0};
@@ -937,28 +940,64 @@ ACT.salvaGestor=d=>{const nm=fv('g_nome').trim();if(!nm)return toast('Informe o 
   const g=d.id?gest(d.id):{id:uid(),lojas:[]};Object.assign(g,{nome:nm,grupo:fv('g_grupo'),qtdLojas:n(fv('g_qtd')),telefone:fv('g_tel'),email:fv('g_email'),cidade:fv('g_cid'),uf:fv('g_uf').toUpperCase(),repId:fv('g_rep'),status:fv('g_st'),obs:fv('g_obs')});
   if(!d.id){S.gestores.push(g);UI.open.add(g.id)}save();closeModal();render();toast(d.id?'Gestor atualizado':'Gestor cadastrado. Agora inclua as lojas (CNPJs).','okk')};
 ACT.delGestor=(d,b)=>{const g=gest(d.id);if(S.pedidos.some(p=>(g.lojas||[]).some(l=>l.id===p.lojaId)))return toast('Este gestor tem pedidos. Marque como inativo em vez de excluir.','err');if(!armed(b))return;S.gestores=S.gestores.filter(x=>x.id!==d.id);save();closeModal();render()};
-ACT.editLoja=d=>{const g=gest(d.g);const l=d.id?g.lojas.find(x=>x.id===d.id):{nome:'',cnpj:'',razao:'',cidade:g.cidade||'',uf:g.uf||'RJ',endereco:'',pot:'B',ie:'',obs:''};
-  openModal(`${d.id?'Editar loja':'Nova loja'} · ${h(g.nome)}`,{body:()=>`<div class="fg">${fld('l_nome','Nome da loja',l.nome,{w:'w2',ph:'Ex.: Flamengo Shopping Tijuca'})}${fld('l_cnpj','CNPJ',fmtCNPJ(l.cnpj),{ph:'00.000.000/0000-00'})}<div class="f" id="cnpjMsg" style="justify-content:flex-end"></div>${fld('l_razao','Razão social',l.razao,{w:'w2'})}${fld('l_ie','Inscrição estadual',l.ie)}${fld('l_cid','Cidade',l.cidade)}${fld('l_uf','UF',l.uf)}${fld('l_end','Endereço de entrega',l.endereco,{w:'w2'})}${fld('l_sis','Sistema de PDV da loja',l.pdvSis,{ph:'Ex.: Linx, Bling…'})}${fld('l_pdv','Código da loja no PDV',l.pdvCod,{hint:'Se o PDV não enviar o CNPJ'})}
-   ${fld('l_pot','Potencial',0,{sel:opt('A','A – alto',l.pot)+opt('B','B – médio',l.pot)+opt('C','C – baixo',l.pot),hint:'Define o tamanho do mix'})}${fld('l_obs','Observações',l.obs,{ta:1,w:'wf'})}</div>`,
+ACT.editLoja=d=>{const g=gest(d.g);const l=d.id?g.lojas.find(x=>x.id===d.id):{nome:'',cnpj:'',razao:'',cidade:g.cidade||'',uf:g.uf||'RJ',endereco:'',bairro:'',cep:'',pot:'B',ie:'',status:'ativa',rede:'FLAMENGO',comprador:{},financeiro:{},obs:''};
+  const cp=l.comprador||{},fi=l.financeiro||{};
+  openModal(`${d.id?'Editar loja':'Nova loja'} · ${h(g.nome)}`,{wide:true,body:()=>`<div class="fg">${fld('l_nome','Nome da loja',l.nome,{w:'w2',ph:'Ex.: NRN Rio Sul'})}${fld('l_cnpj','CNPJ',fmtCNPJ(l.cnpj),{ph:'00.000.000/0000-00'})}<div class="f" id="cnpjMsg" style="justify-content:flex-end"></div>
+   ${fld('l_razao','Razão social',l.razao,{w:'w2'})}${fld('l_ie','Inscrição estadual',l.ie)}${fld('l_suf','Suframa',l.suframa)}
+   ${fld('l_end','Endereço de entrega',l.endereco,{w:'w2'})}${fld('l_bai','Bairro',l.bairro)}${fld('l_cep','CEP',l.cep)}${fld('l_cid','Cidade',l.cidade)}${fld('l_uf','UF',l.uf)}
+   ${fld('l_st','Situação',0,{sel:opt('ativa','Ativa',l.status||'ativa')+opt('inativa','Inativa',l.status||'ativa')})}${fld('l_rede','Rede',l.rede)}
+   ${fld('l_sis','Sistema de PDV da loja',l.pdvSis,{ph:'Ex.: Linx, Bling…'})}${fld('l_pdv','Código da loja no PDV',l.pdvCod,{hint:'Se o PDV não enviar o CNPJ'})}
+   ${fld('l_pot','Potencial',0,{sel:opt('A','A – alto',l.pot)+opt('B','B – médio',l.pot)+opt('C','C – baixo',l.pot),hint:'Define o tamanho do mix'})}</div>
+   <div class="cols"><div class="box"><h3>Comprador</h3><div class="fg">${fld('l_cpn','Nome',cp.nome)}${fld('l_cpt','Telefone',cp.tel)}${fld('l_cpe','E-mail',cp.email,{w:'w2'})}</div></div>
+   <div class="box"><h3>Financeiro</h3><div class="fg">${fld('l_fin','Nome',fi.nome)}${fld('l_fit','Telefone',fi.tel)}${fld('l_fie','E-mail',fi.email,{w:'w2'})}</div></div></div>
+   ${fld('l_obs','Observações',l.obs,{ta:1,w:'wf'})}`,
    after:()=>checaCNPJ(d.id),onInput:e=>{if(e.target.id==='l_cnpj')checaCNPJ(d.id)},
    foot:()=>`${d.id?`<button class="btn dng" data-act="delLoja" data-g="${g.id}" data-id="${d.id}">Excluir</button>`:''}<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="salvaLoja" data-g="${g.id}" data-id="${d.id||''}">Salvar</button>`})};
 function checaCNPJ(selfId){const v=fv('l_cnpj');const el=$('#cnpjMsg');if(!el)return;const dg=onlyDig(v);
   const dup=dg&&allLojas().find(o=>onlyDig(o.l.cnpj)===dg&&o.l.id!==selfId);
-  el.innerHTML=!dg?'':dup?chip('Já cadastrado em '+h(dup.g.nome),'c-bad'):dg.length<14?chip('Incompleto','c-warn'):cnpjOk(dg)?chip('CNPJ válido','c-ok'):chip('Dígitos não conferem','c-bad')}
+  el.innerHTML=!dg?'':dg.length<14?chip('Incompleto','c-warn'):!cnpjOk(dg)?chip('Dígitos não conferem','c-bad'):dup?chip('Mesmo CNPJ de '+h(dup.l.nome),'c-warn'):chip('CNPJ válido','c-ok')}
 ACT.salvaLoja=d=>{const g=gest(d.g);const nm=fv('l_nome').trim();if(!nm)return toast('Informe o nome da loja.','err');
-  const dg=onlyDig(fv('l_cnpj'));if(dg&&allLojas().some(o=>onlyDig(o.l.cnpj)===dg&&o.l.id!==d.id))return toast('Este CNPJ já está cadastrado.','err');
-  const l=d.id?g.lojas.find(x=>x.id===d.id):{id:uid()};Object.assign(l,{nome:nm,cnpj:dg,razao:fv('l_razao'),ie:fv('l_ie'),cidade:fv('l_cid'),uf:fv('l_uf').toUpperCase(),endereco:fv('l_end'),pot:fv('l_pot'),obs:fv('l_obs'),pdvSis:fv('l_sis'),pdvCod:fv('l_pdv').trim()});
-  g.lojas=g.lojas||[];if(!d.id)g.lojas.push(l);UI.open.add(g.id);save();closeModal();render();toast(dg&&!cnpjOk(dg)?'Loja salva, mas confira o CNPJ.':'Loja salva','okk')};
+  const dg=onlyDig(fv('l_cnpj'));const dup=dg&&allLojas().find(o=>onlyDig(o.l.cnpj)===dg&&o.l.id!==d.id);
+  const l=d.id?g.lojas.find(x=>x.id===d.id):{id:uid()};
+  Object.assign(l,{nome:nm,cnpj:dg,razao:fv('l_razao'),ie:fv('l_ie'),suframa:fv('l_suf'),endereco:fv('l_end'),bairro:fv('l_bai'),cep:fv('l_cep'),cidade:fv('l_cid'),uf:fv('l_uf').toUpperCase(),status:fv('l_st'),rede:fv('l_rede'),
+    pot:fv('l_pot'),obs:fv('l_obs'),pdvSis:fv('l_sis'),pdvCod:fv('l_pdv').trim(),comprador:{nome:fv('l_cpn'),tel:fv('l_cpt'),email:fv('l_cpe')},financeiro:{nome:fv('l_fin'),tel:fv('l_fit'),email:fv('l_fie')}});
+  g.lojas=g.lojas||[];if(!d.id)g.lojas.push(l);UI.open.add(g.id);save();closeModal();render();
+  toast(dg&&!cnpjOk(dg)?'Loja salva, mas confira o CNPJ.':dup?`Loja salva. Atenção: mesmo CNPJ de ${dup.l.nome}.`:'Loja salva',dup||(dg&&!cnpjOk(dg))?'':'okk')};
 ACT.delLoja=(d,b)=>{if(S.pedidos.some(p=>p.lojaId===d.id))return toast('Esta loja tem pedidos e não pode ser excluída.','err');if(!armed(b))return;const g=gest(d.g);g.lojas=g.lojas.filter(l=>l.id!==d.id);save();closeModal();render()};
-ACT.importar=()=>openModal('Importar gestores e lojas',{body:()=>`<p class="note">Cole uma linha por loja, com as colunas separadas por ponto e vírgula ou TAB (copiado do Excel):<br><b>Gestor ; Loja ; CNPJ ; Cidade ; UF ; Potencial (A/B/C)</b><br>Gestor sem loja ainda? Deixe Loja e CNPJ vazios. Gestores com o mesmo nome são agrupados; CNPJs repetidos são ignorados.</p><textarea id="impTxt" style="min-height:200px" placeholder="João Silva;Flamengo Barra;12.345.678/0001-90;Rio de Janeiro;RJ;A"></textarea><div id="impPrev" class="note"></div>`,
-  onInput:()=>{const r=parseImp(fv('impTxt'));$('#impPrev').textContent=r.linhas?`${r.gNovos} gestor(es) novo(s), ${r.lNovas} loja(s) nova(s), ${r.dup} CNPJ repetido(s)`:''},
+ACT.importar=()=>openModal('Importar gestores e lojas',{body:()=>`<p class="note">Copie do Excel e cole aqui. <b>Com a linha de títulos</b> (GESTOR, LOJA, RAZAO_SOCIAL, CNPJ, INSCRICAO_ESTADUAL, ENDERECO, NUMERO, COMPLEMENTO, BAIRRO, CIDADE, ESTADO, CEP, COMPRADOR, TEL_COMPRADOR, EMAIL_COMPRADOR, FINANCEIRO, TEL_FINANCEIRO, EMAIL_FINANCEIRO, STATUS_LOJA, REDE, POTENCIAL), o sistema reconhece cada coluna pelo nome, em qualquer ordem. Sem títulos, use: <b>Gestor ; Loja ; CNPJ ; Cidade ; UF ; Potencial</b>.<br>Gestores com o mesmo nome são agrupados. Loja já cadastrada (mesmo CNPJ e mesmo nome) é atualizada, não duplicada.</p><div class="row"><label class="btn pri" for="impArq">Escolher arquivo Excel (.xlsx)</label><input id="impArq" type="file" accept=".xlsx,.xls,.csv" hidden><span class="sm mut" id="impArqNome">ou cole abaixo</span></div><textarea id="impTxt" style="min-height:200px" placeholder="GESTOR	LOJA	CNPJ	CIDADE	ESTADO&#10;ALEXANDRE	NRN RIO SUL	62976818000100	RIO DE JANEIRO	RJ"></textarea><div id="impPrev" class="note"></div>`,
+  onInput:()=>prevImp(),onChange:e=>{if(e.target.id==='impArq')lerExcel(e.target)},
   foot:()=>`<span class="sp"></span><button class="btn" data-act="closeM">Cancelar</button><button class="btn pri" data-act="impOk">Importar</button>`});
-function parseImp(txt,apply){const linhas=String(txt).split(/\r?\n/).map(l=>l.trim()).filter(Boolean);let gNovos=0,lNovas=0,dup=0;const seen=new Set(allLojas().map(o=>onlyDig(o.l.cnpj)).filter(Boolean));const gMap={};S.gestores.forEach(g=>gMap[g.nome.toLowerCase()]=g);
-  linhas.forEach(li=>{const c=li.split(li.includes('\t')?'\t':';').map(x=>x.trim());if(!c[0]||/^gestor$/i.test(c[0]))return;let g=gMap[c[0].toLowerCase()];
-    if(!g){g={id:uid(),nome:c[0],grupo:'',telefone:'',email:'',cidade:c[3]||'',uf:(c[4]||'').toUpperCase(),repId:'',qtdLojas:0,status:'ativo',obs:'',lojas:[]};gMap[c[0].toLowerCase()]=g;gNovos++;if(apply)S.gestores.push(g)}
-    if(c[1]){const dg=onlyDig(c[2]);if(dg&&seen.has(dg)){dup++;return}if(dg)seen.add(dg);lNovas++;if(apply)g.lojas.push({id:uid(),nome:c[1],cnpj:dg,razao:'',ie:'',cidade:c[3]||'',uf:(c[4]||'').toUpperCase(),endereco:'',pot:/^[ABC]$/i.test(c[5]||'')?c[5].toUpperCase():'B',obs:''})}});
-  return {linhas:linhas.length,gNovos,lNovas,dup}}
-ACT.impOk=()=>{const r=parseImp(fv('impTxt'),true);if(!r.linhas)return toast('Cole as linhas primeiro.','err');save();closeModal();render();toast(`${r.gNovos} gestores e ${r.lNovas} lojas importados`,'okk')};
+function prevImp(){const r=parseImp(fv('impTxt'));$('#impPrev').innerHTML=r.linhas?`<b>Prévia:</b> ${r.gNovos} gestor(es) novo(s), ${r.lNovas} loja(s) nova(s), ${r.atu} já cadastrada(s) que serão atualizadas${r.cnpjInv?`, <span class="bad">${r.cnpjInv} com CNPJ inválido</span>`:''}. Confira e clique em Importar.`:''}
+function carregaSheetJS(){return window.XLSX?Promise.resolve():new Promise((ok,er)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';sc.onload=ok;sc.onerror=er;document.head.appendChild(sc)})}
+async function lerExcel(inp){const f=inp.files[0];if(!f)return;$('#impArqNome').textContent='Lendo '+f.name+'…';
+  try{await carregaSheetJS();const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+    const nome=wb.SheetNames.find(x=>/loja/i.test(x)&&!/click/i.test(x))||wb.SheetNames[0];
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[nome],{header:1,raw:false,defval:'',blankrows:false});
+    const tsv=rows.map(r=>r.map(c=>String(c??'').replace(/[\t\r\n]+/g,' ').trim()).join('\t')).filter(l=>l.replace(/\t/g,'').trim()).join('\n');
+    $('#impTxt').value=tsv;$('#impArqNome').textContent=`${f.name} · aba ${nome}`;prevImp()}
+  catch(e){$('#impArqNome').textContent='Não consegui ler o arquivo. Copie as linhas no Excel e cole abaixo.';toast('Não consegui ler o Excel. Use copiar e colar.','err')}}
+function parseImp(txt,apply){
+  const linhas=String(txt).split(/\r?\n/).filter(l=>l.trim());let gNovos=0,lNovas=0,atu=0,cnpjInv=0;const gMap={};S.gestores.forEach(g=>gMap[g.nome.trim().toLowerCase()]=g);
+  if(!linhas.length)return {linhas:0,gNovos,lNovas,atu,cnpjInv};
+  const sep=linhas[0].includes('\t')?'\t':';';const norm=s=>String(s||'').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'_');
+  const h0=linhas[0].split(sep).map(norm);const temTit=h0.includes('GESTOR')&&h0.includes('LOJA');
+  const idx=temTit?Object.fromEntries(h0.map((k,i)=>[k,i])):{GESTOR:0,LOJA:1,CNPJ:2,CIDADE:3,ESTADO:4,POTENCIAL:5};
+  const col=(c,k)=>idx[k]!=null?String(c[idx[k]]??'').trim():'';
+  (temTit?linhas.slice(1):linhas).forEach(li=>{const c=li.split(sep);const gn=col(c,'GESTOR');if(!gn||/^gestor$/i.test(gn))return;
+    let g=gMap[gn.toLowerCase()];
+    if(!g){g={id:uid(),nome:gn,grupo:'',telefone:'',email:'',cidade:col(c,'CIDADE'),uf:(col(c,'ESTADO')||col(c,'UF')).toUpperCase(),repId:'',qtdLojas:0,status:'ativo',obs:'',lojas:[]};gMap[gn.toLowerCase()]=g;gNovos++;if(apply)S.gestores.push(g)}
+    const ln=col(c,'LOJA');if(!ln)return;const dg=onlyDig(col(c,'CNPJ'));if(dg&&!cnpjOk(dg))cnpjInv++;
+    const end=[col(c,'ENDERECO'),col(c,'NUMERO'),col(c,'COMPLEMENTO')].filter(Boolean).join(', ');
+    const dados={nome:ln,cnpj:dg,cidade:col(c,'CIDADE'),uf:(col(c,'ESTADO')||col(c,'UF')).toUpperCase()};
+    if(temTit)Object.assign(dados,{razao:col(c,'RAZAO_SOCIAL'),ie:col(c,'INSCRICAO_ESTADUAL'),suframa:col(c,'SUFRAMA'),endereco:end,bairro:col(c,'BAIRRO'),cep:(d=>d.length===7?'0'+d:col(c,'CEP'))(onlyDig(col(c,'CEP'))),
+      status:/inativ/i.test(col(c,'STATUS_LOJA'))?'inativa':'ativa',rede:col(c,'REDE'),
+      comprador:{nome:col(c,'COMPRADOR'),tel:col(c,'TEL_COMPRADOR'),email:col(c,'EMAIL_COMPRADOR')},financeiro:{nome:col(c,'FINANCEIRO'),tel:col(c,'TEL_FINANCEIRO'),email:col(c,'EMAIL_FINANCEIRO')}});
+    const pot=col(c,'POTENCIAL').toUpperCase();if(/^[ABC]$/.test(pot))dados.pot=pot;
+    const ex=allLojas().find(o=>o.l.nome.trim().toLowerCase()===ln.toLowerCase()&&onlyDig(o.l.cnpj)===dg)||(g.lojas||[]).find(l=>l.nome.trim().toLowerCase()===ln.toLowerCase()&&onlyDig(l.cnpj)===dg);
+    if(ex){atu++;if(apply)Object.assign(ex.l||ex,dados);return}
+    lNovas++;if(apply)g.lojas.push({id:uid(),pot:'B',obs:'',ie:'',razao:'',endereco:'',...dados})});
+  return {linhas:linhas.length,gNovos,lNovas,atu,cnpjInv}}
+ACT.impOk=()=>{const r=parseImp(fv('impTxt'),true);if(!r.linhas)return toast('Cole as linhas primeiro.','err');S.gestores.forEach(g=>{g.qtdLojas=Math.max(n(g.qtdLojas),(g.lojas||[]).length)});if(allLojas().length>n(S.cfg.totalRede))S.cfg.totalRede=allLojas().length;save();closeModal();render();toast(`${r.gNovos} gestores novos, ${r.lNovas} lojas novas, ${r.atu} atualizadas`,'okk')};
 
 /* ---------- Produto ---------- */
 let PP=null;
@@ -1137,8 +1176,11 @@ async function entrou_(){
   ME=u;$('#login').hidden=true;$('#me').innerHTML=`${h(u.nome||u.email)} · <button class="lnk" data-act="sair">Sair</button>`;
   if(!(await carregar()))return;carregarPDV();
   SB.channel('mudancas').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},pl=>{
-      if(pl.new&&pl.new.versao>VERSAO&&!SUJO&&!SALVANDO){carregar().then(()=>toast('Dados atualizados por '+(pl.new.atualizado_por||'outro usuário')))}})
-    .on('postgres_changes',{event:'*',schema:'public',table:'pdv_vendas'},()=>{clearTimeout(window._pdvT);window._pdvT=setTimeout(carregarPDV,2000)}).subscribe();
+      if(!(pl.new&&pl.new.versao>VERSAO))return;const quem=(pl.new.atualizado_por||'outro usuário').split('@')[0];const hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      if(!SUJO&&!SALVANDO&&!MODAL){carregar().then(()=>{aviso(`Dados atualizados por <b>${h(quem)}</b> às ${hr}. A tela já mostra a versão nova.`);toast('Chegou atualização de '+quem)})}
+      else aviso(`<b>${h(quem)}</b> alterou os dados às ${hr}.`,{btn:'Atualizar agora',act:'atualizar'})})
+    .on('postgres_changes',{event:'*',schema:'public',table:'pdv_vendas'},()=>{clearTimeout(window._pdvT);window._pdvT=setTimeout(()=>{carregarPDV();aviso('Chegaram novas vendas do PDV das lojas.',{btn:'Ver sell-out',act:'irSellout'})},2000)}).subscribe();
+  setInterval(checaVersao,180000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checaVersao()});
 }
 async function iniciarSupa(){
   S=blank();$('#syncBox').hidden=false;
@@ -1158,6 +1200,22 @@ async function desenharUsuarios(){const box=$('#usrBox');if(!box||!SB)return;
   ${dono?`<div class="fg" style="margin-top:12px">${fld('us_e','E-mail',0,{t:'email'})}${fld('us_n','Nome',0)}${fld('us_p','Perfil',0,{sel:opt('equipe','Equipe')+opt('representante','Representante')+opt('proprietario','Proprietário')})}<div class="f" style="justify-content:flex-end"><button class="btn pri" data-act="usrAdd">Autorizar</button></div></div><p class="note">Depois de autorizada, a pessoa abre o sistema, clica em “Criar meu acesso” com este e-mail e escolhe a senha.</p>`:'<p class="note">Só o proprietário inclui ou bloqueia usuários.</p>'}`}
 ACT.usrAdd=async()=>{const e=fv('us_e').trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(e))return toast('E-mail inválido.','err');const {error}=await SB.from('usuarios').insert({email:e,nome:fv('us_n').trim(),papel:fv('us_p')});toast(error?(error.code==='23505'?'Este e-mail já está autorizado.':error.message):'Usuário autorizado','okk');desenharUsuarios()};
 ACT.usrTog=async d=>{const {error}=await SB.from('usuarios').update({ativo:d.a!=='1'}).eq('email',d.e);if(error)toast(error.message,'err');desenharUsuarios()};
+
+
+/* ============ avisos de atualização ============ */
+function aviso(html,o={}){const a=$('#aviso');a.className=o.novo?'novo':'';a.hidden=false;
+  a.innerHTML=`<span>🔔 ${html}</span><span class="acts">${o.btn?`<button class="btn sm pri" data-act="${o.act}">${o.btn}</button>`:''}<button class="btn sm" data-act="avisoX">Fechar</button></span>`}
+ACT.avisoX=()=>{$('#aviso').hidden=true};
+ACT.irSellout=()=>{$('#aviso').hidden=true;location.hash='#sellout'};
+ACT.novaVersao=()=>location.reload();
+ACT.atualizar=async(d,b)=>{if(!SB){render();return toast('Tela atualizada','okk')}
+  if(SUJO||SALVANDO)return toast('Aguarde: ainda estou salvando a sua última alteração.','err');
+  if(b)b.disabled=true;const ok=await carregar();await carregarPDV();if(b&&b.isConnected)b.disabled=false;
+  $('#aviso').hidden=true;checaVersao();if(ok)toast('Dados atualizados agora','okk')};
+let VER_AVISADA=false;
+async function checaVersao(){if(!SB||APP_VER==='dev'||VER_AVISADA)return;
+  try{const r=await fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/const APP_VER='([^']+)'/);
+    if(m&&m[1]!==APP_VER){VER_AVISADA=true;aviso('Saiu uma <b>nova versão do sistema</b>. Clique para carregar as novidades.',{btn:'Atualizar sistema',act:'novaVersao',novo:true})}}catch(e){}}
 
 /* ============ dados de exemplo ============ */
 function cnpjFake(i){const b=('9'+String(1000000+i*7919).padStart(7,'0')+'0001').split('').map(Number);const dv=l=>{let t=0,p=l-7;for(let k=0;k<l;k++){t+=b[k]*p--;if(p<2)p=9}const r=t%11;return r<2?0:11-r};b.push(dv(12));b.push(dv(13));return b.join('')}
